@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>phdGPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Ensure icon background matches button */
+        .branch-icon-wrapper {
+            background-color: white;
+        }
+        .branch-icon-wrapper img {
+            background-color: white;
+        }
+        /* Share dropdown */
+        .share-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            min-width: 280px;
+            z-index: 50;
+        }
+        .share-dropdown.show {
+            display: block;
+        }
+        /* Branch dropdown */
+        .branch-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            min-width: 280px;
+            z-index: 50;
+        }
+        .branch-dropdown.show {
+            display: block;
+        }
+        /* Zoom out chat messages when share mode is active */
+        #chatMessages {
+            transition: transform 0.3s ease;
+        }
+        body.share-mode #chatMessages {
+            transform: scale(0.75);
+            transform-origin: top center;
+        }
+        /* Change AI message bubbles to blue when Carlos is selected */
+        body.carlos-selected #chatMessages .ai-message-bubble {
+            background-color: #90DFFB !important;
+            border-color: #90DFFB !important;
+        }
+        /* Change AI message bubbles to green when Ted is selected */
+        body.ted-selected #chatMessages .ai-message-bubble {
+            background-color: #90FBCD !important;
+            border-color: #90FBCD !important;
+        }
+        /* Share tooltip/comment box */
+        .share-tooltip-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 99;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .share-tooltip-backdrop.show {
+            display: block;
+            opacity: 1;
+        }
+        .share-tooltip {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            min-width: 400px;
+            max-width: 500px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .share-tooltip.show {
+            display: block;
+            opacity: 1;
+        }
+        .share-tooltip-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .share-tooltip-content {
+            padding: 16px;
+        }
+        .share-tooltip-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.5;
+            outline: none;
+        }
+        .share-tooltip-textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        }
+        .share-tooltip-footer {
+            display: flex;
+            justify-content: flex-end;
+            padding: 12px 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .share-tooltip-send {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .share-tooltip-send:hover {
+            background: #2563eb;
+        }
+        .share-tooltip-send-checkmark {
+            display: none;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            align-items: center;
+            justify-content: center;
+        }
+        .share-tooltip-footer.sent .share-tooltip-send {
+            display: none;
+        }
+        .share-tooltip-footer.sent .share-tooltip-send-checkmark {
+            display: flex;
+        }
+        /* Share button checkmark replacement */
+        .share-checkmark {
+            display: none;
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 9999px;
+            color: #10b981;
+            cursor: default;
+        }
+        .share-checkmark.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .share-button-wrapper.hidden .share-button-container {
+            display: none;
+        }
+        .share-button-wrapper.hidden .share-checkmark {
+            display: flex;
+        }
+        /* Notification toast */
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .notification-toast.show {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Sent message tooltip */
+        .sent-message-tooltip {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            min-width: 400px;
+            max-width: 500px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sent-message-tooltip.show {
+            display: block;
+            opacity: 1;
+        }
+        .sent-message-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .sent-message-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sent-message-content {
+            padding: 16px;
+            color: #6b7280;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .sent-message-checkmark {
+            color: #000;
+        }
+    </style>
+</head>
+<body class="bg-white h-screen overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <!-- Top Bar -->
+        <div class="flex border-b border-gray-700">
+            <!-- Logo and Name -->
+            <div class="w-64 bg-gray-800 text-white border-r border-gray-700">
+                <div class="p-4">
+                    <h1 class="text-2xl font-bold">phdGPT</h1>
+                </div>
+            </div>
+            <!-- Header Buttons -->
+            <header class="flex-1 bg-white flex justify-end items-center">
+                <div class="px-6 py-4 flex items-center gap-3">
+                    <div class="relative">
+                        <button id="branchButton" class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full transition-colors text-gray-700 text-sm font-medium border border-gray-300">
+                            <div class="branch-icon-wrapper w-4 h-4 bg-white flex items-center justify-center">
+                                <img src="images/branch icon.png" alt="Branch" class="w-4 h-4" />
+                            </div>
+                            <span>Branch</span>
+                        </button>
+                        <!-- Branch Dropdown -->
+                        <div id="branchDropdown" class="branch-dropdown">
+                            <div class="p-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Search Name" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-3"
+                                />
+                                <div class="space-y-2">
+                                    <div class="branch-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer justify-between" data-name="Carlos R." data-initial="C" data-color="#90DFFB">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #90DFFB;">
+                                                C
+                                            </div>
+                                            <span class="text-gray-700 text-sm">Carlos R.</span>
+                                        </div>
+                                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </div>
+                                    <div class="branch-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer justify-between" data-name="Ted S." data-initial="T" data-color="#29FFA2">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #29FFA2;">
+                                                T
+                                            </div>
+                                            <span class="text-gray-700 text-sm">Ted S.</span>
+                                        </div>
+                                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative share-button-wrapper">
+                        <div class="share-button-container">
+                            <button id="shareButton" class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full transition-colors text-gray-700 text-sm font-medium border border-gray-300">
+                                <span>Share</span>
+                                <div class="branch-icon-wrapper w-4 h-4 bg-white flex items-center justify-center">
+                                    <img src="images/export icon.png" alt="Share" class="w-4 h-4" />
+                                </div>
+                            </button>
+                        </div>
+                        <div id="shareCheckmark" class="share-checkmark">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <!-- Share Dropdown -->
+                        <div id="shareDropdown" class="share-dropdown">
+                            <div class="p-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Search Name" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-3"
+                                />
+                                <div class="space-y-2">
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Carlos R." data-initial="C" data-color="#90DFFB">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #90DFFB;">
+                                            C
+                                        </div>
+                                        <span class="text-gray-700 text-sm">Carlos R.</span>
+                                    </div>
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Ted S." data-initial="T" data-color="#29FFA2">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #29FFA2;">
+                                            T
+                                        </div>
+                                        <span class="text-gray-700 text-sm">Ted S.</span>
+                                    </div>
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Paige T." data-initial="P" data-color="bg-emerald-500">
+                                        <div class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                            P
+                                        </div>
+                                        <span class="text-gray-700 text-sm">Paige T.</span>
+                                    </div>
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Sylvia K." data-initial="S" data-color="bg-orange-500">
+                                        <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                            S
+                                        </div>
+                                        <span class="text-gray-700 text-sm">Sylvia K.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Share Tooltip Backdrop -->
+                    <div id="shareTooltipBackdrop" class="share-tooltip-backdrop"></div>
+                    <!-- Sent Message Tooltip -->
+                    <div id="sentMessageTooltip" class="sent-message-tooltip">
+                        <div class="sent-message-header">
+                            <div class="sent-message-header-left">
+                                <div id="sentMessageAvatar" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                </div>
+                                <span id="sentMessageName" class="text-gray-700 font-medium"></span>
+                                <svg id="sentMessageCheckmark" class="sent-message-checkmark w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <button id="closeSentMessage" class="text-gray-400 hover:text-gray-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="sent-message-content">
+                            <p id="sentMessageText"></p>
+                        </div>
+                    </div>
+                    <!-- Share Tooltip -->
+                    <div id="shareTooltip" class="share-tooltip">
+                        <div class="share-tooltip-header">
+                            <div class="flex items-center gap-3">
+                                <div id="tooltipAvatar" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                </div>
+                                <span id="tooltipName" class="text-gray-700 font-medium"></span>
+                            </div>
+                            <button id="closeTooltip" class="text-gray-400 hover:text-gray-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="share-tooltip-content">
+                            <textarea 
+                                id="tooltipTextarea" 
+                                class="share-tooltip-textarea" 
+                                placeholder="This is what I prompted. Unsure if others would agree these are appropriate process indicators. Let me know what you think."
+                            ></textarea>
+                        </div>
+                        <div id="shareTooltipFooter" class="share-tooltip-footer">
+                            <button id="sendTooltip" type="button" class="share-tooltip-send">
+                                <svg class="w-5 h-5 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                <span>Send</span>
+                            </button>
+                            <div id="sendTooltipCheckmark" class="share-tooltip-send-checkmark">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="p-2 hover:bg-gray-50 rounded-full transition-colors border border-gray-300">
+                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="flex flex-1 overflow-hidden">
+        <!-- Left Sidebar -->
+        <aside class="w-64 bg-gray-800 text-white flex flex-col h-full">
+            <!-- Navigation -->
+            <nav class="flex-1">
+                <div class="p-4 space-y-2">
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>New chat</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <span>Search chat</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        <span>Library</span>
+                    </button>
+                </div>
+            </nav>
+            
+            <!-- Chat History -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4">
+                <h2 class="text-sm font-semibold text-gray-400 mb-3 uppercase">Chats</h2>
+                <div class="space-y-1">
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Typo Assistance Request
+                    </button>
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Generate images on Sora
+                    </button>
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Urban Green Spaces
+                    </button>
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Typo Assistance Request
+                    </button>
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Workshop agenda creation
+                    </button>
+                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                        Section 1 structure
+                    </button>
+                </div>
+            </div>
+            
+            <!-- User Profile -->
+            <div class="border-t border-gray-700">
+                <div class="p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                            S
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium truncate">Shruthi Iyer</p>
+                            <p class="text-xs text-gray-400 truncate">Student Account</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col bg-white h-full overflow-hidden">
+            
+            <!-- Chat Messages Area -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar py-8" id="chatMessages">
+                <div class="max-w-2xl mx-auto px-6">
+                    <!-- User Message -->
+                    <div class="flex justify-end mb-6">
+                        <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
+                            <p class="text-gray-800">
+                                Hey, I'm designing a study to evaluate how novice researchers use AI tools during literature review. I want to compare three workflows: baseline, AI-summaries, and AI-guided questioning. I'm stuck on how to operationalize "depth of understanding." Any suggestions?
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- AI Message -->
+                    <div class="flex justify-start mb-6">
+                        <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                            <p class="text-gray-800">
+                                Sure — "depth of understanding" in HCI literature is often operationalized across three dimensions: 1. Breadth (coverage of core ideas, concepts identified) 2. Accuracy (correctness vs hallucination/overgeneralization) 3. Structure (how well connections are made between concepts) You can turn those into a rubric: • 0-2 points per dimension • Evaluate written summaries, outlines, or concept maps • Inter-rater reliability check using Cohen's k Would you like me to draft the rubric?
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- User Message -->
+                    <div class="flex justify-end mb-6">
+                        <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
+                            <p class="text-gray-800">
+                                Yes — but I'm worried reviewers will say rubric scoring is subjective. Should I include behavioral metrics?
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- AI Message -->
+                    <div class="flex justify-start mb-6">
+                        <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                            <p class="text-gray-800">
+                                Great instinct. Add process-level indicators, which pair nicely with rubric scoring: • Time • Number of sources consulted • Switching behavior (e.g., toggling between article and notes) • Latency before taking first note
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input Area -->
+            <div class="border-t border-gray-200 py-4">
+                <div class="max-w-2xl mx-auto px-6">
+                    <form id="chatForm" class="relative">
+                        <input 
+                            type="text" 
+                            id="messageInput"
+                            placeholder="Ask anything" 
+                            class="w-full bg-blue-600 text-white rounded-full px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-blue-200 border border-blue-400"
+                        />
+                        <button 
+                            type="submit"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-blue-100 transition-colors p-1"
+                        >
+                            <svg class="w-5 h-5 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Notification Toast -->
+    <div id="notificationToast" class="notification-toast">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        <span>Chat sent</span>
+    </div>
+    
+    <script>
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const chatMessages = document.getElementById('chatMessages');
+        const branchButton = document.getElementById('branchButton');
+        const branchDropdown = document.getElementById('branchDropdown');
+        const shareButton = document.getElementById('shareButton');
+        const shareDropdown = document.getElementById('shareDropdown');
+        const shareTooltip = document.getElementById('shareTooltip');
+        const shareTooltipBackdrop = document.getElementById('shareTooltipBackdrop');
+        const tooltipAvatar = document.getElementById('tooltipAvatar');
+        const tooltipName = document.getElementById('tooltipName');
+        const tooltipTextarea = document.getElementById('tooltipTextarea');
+        const closeTooltip = document.getElementById('closeTooltip');
+        const sendTooltip = document.getElementById('sendTooltip');
+        const shareTooltipFooter = document.getElementById('shareTooltipFooter');
+        const shareCheckmark = document.getElementById('shareCheckmark');
+        const shareButtonWrapper = document.querySelector('.share-button-wrapper');
+        const sentMessageTooltip = document.getElementById('sentMessageTooltip');
+        const sentMessageAvatar = document.getElementById('sentMessageAvatar');
+        const sentMessageName = document.getElementById('sentMessageName');
+        const sentMessageText = document.getElementById('sentMessageText');
+        const closeSentMessage = document.getElementById('closeSentMessage');
+        const notificationToast = document.getElementById('notificationToast');
+        
+        // Branch button functionality
+        branchButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            branchDropdown.classList.toggle('show');
+            // Close share dropdown if open
+            shareDropdown.classList.remove('show');
+            document.body.classList.remove('share-mode');
+        });
+        
+        // Share button functionality
+        shareButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isShowing = shareDropdown.classList.toggle('show');
+            
+            // Close branch dropdown if open
+            branchDropdown.classList.remove('show');
+            
+            // Toggle zoom on chat messages
+            if (isShowing) {
+                document.body.classList.add('share-mode');
+            } else {
+                document.body.classList.remove('share-mode');
+            }
+        });
+        
+        // Handle clicking on a person in the branch dropdown
+        document.querySelectorAll('.branch-person').forEach(person => {
+            person.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const name = person.dataset.name;
+                
+                // Close branch dropdown
+                branchDropdown.classList.remove('show');
+                
+                // Remove all selection classes first
+                document.body.classList.remove('carlos-selected', 'ted-selected');
+                
+                // Add appropriate class based on who was clicked
+                if (name === 'Carlos R.') {
+                    document.body.classList.add('carlos-selected');
+                } else if (name === 'Ted S.') {
+                    document.body.classList.add('ted-selected');
+                }
+            });
+        });
+        
+        // Handle clicking on a person in the share dropdown
+        document.querySelectorAll('.share-person').forEach(person => {
+            person.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const name = person.dataset.name;
+                const initial = person.dataset.initial;
+                const color = person.dataset.color;
+                
+                // Hide dropdown
+                shareDropdown.classList.remove('show');
+                
+                // Update tooltip with person's info
+                tooltipAvatar.textContent = initial;
+                if (color.startsWith('#')) {
+                    tooltipAvatar.className = 'w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm';
+                    tooltipAvatar.style.backgroundColor = color;
+                } else {
+                    tooltipAvatar.className = `w-10 h-10 ${color} rounded-full flex items-center justify-center text-white font-semibold text-sm`;
+                    tooltipAvatar.style.backgroundColor = '';
+                }
+                tooltipName.textContent = name;
+                tooltipTextarea.value = '';
+                
+                // Reset footer to show Send button (remove sent state)
+                shareTooltipFooter.classList.remove('sent');
+                
+                // Show tooltip and backdrop
+                shareTooltip.classList.add('show');
+                shareTooltipBackdrop.classList.add('show');
+            });
+        });
+        
+        // Close tooltip
+        function closeShareTooltip() {
+            shareTooltip.classList.remove('show');
+            shareTooltipBackdrop.classList.remove('show');
+            document.body.classList.remove('share-mode');
+        }
+        
+        closeTooltip.addEventListener('click', closeShareTooltip);
+        
+        // Send tooltip message
+        if (sendTooltip) {
+            sendTooltip.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const message = tooltipTextarea ? tooltipTextarea.value.trim() : '';
+                console.log('Send button clicked, message:', message);
+                
+                if (message) {
+                    // Here you would send the message to the selected person
+                    console.log(`Sending to ${tooltipName ? tooltipName.textContent : 'unknown'}: ${message}`);
+                    
+                    // Close share tooltip immediately
+                    if (shareTooltip) shareTooltip.classList.remove('show');
+                    if (shareTooltipBackdrop) shareTooltipBackdrop.classList.remove('show');
+                    document.body.classList.remove('share-mode');
+                    
+                    // Show notification toast
+                    if (notificationToast) {
+                        notificationToast.classList.add('show');
+                        
+                        // Hide notification after 3 seconds
+                        setTimeout(() => {
+                            notificationToast.classList.remove('show');
+                        }, 3000);
+                    }
+                } else {
+                    console.log('No message to send');
+                    alert('Please enter a message before sending.');
+                }
+            });
+        } else {
+            console.error('Send button not found!');
+        }
+        
+        // Close sent message tooltip
+        closeSentMessage.addEventListener('click', () => {
+            sentMessageTooltip.classList.remove('show');
+            shareTooltipBackdrop.classList.remove('show');
+            document.body.classList.remove('share-mode');
+        });
+        
+        // Close sent message when clicking backdrop
+        shareTooltipBackdrop.addEventListener('click', (e) => {
+            if (sentMessageTooltip.classList.contains('show')) {
+                sentMessageTooltip.classList.remove('show');
+                shareTooltipBackdrop.classList.remove('show');
+                document.body.classList.remove('share-mode');
+            } else if (shareTooltip.classList.contains('show')) {
+                closeShareTooltip();
+            }
+        });
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!branchButton.contains(e.target) && !branchDropdown.contains(e.target)) {
+                branchDropdown.classList.remove('show');
+            }
+            if (!shareButton.contains(e.target) && !shareDropdown.contains(e.target) && !shareTooltip.contains(e.target) && !sentMessageTooltip.contains(e.target)) {
+                shareDropdown.classList.remove('show');
+                if (!shareTooltip.classList.contains('show') && !sentMessageTooltip.classList.contains('show')) {
+                    document.body.classList.remove('share-mode');
+                }
+            }
+        });
+        
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'flex justify-end mb-6';
+            userMessageDiv.innerHTML = `
+                <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
+                    <p class="text-gray-800">${message}</p>
+                </div>
+            `;
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                messagesContainer.appendChild(userMessageDiv);
+            }
+            
+            // Clear input
+            messageInput.value = '';
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Simulate AI response (you can replace this with actual API call)
+            setTimeout(() => {
+                const aiMessageDiv = document.createElement('div');
+                aiMessageDiv.className = 'flex justify-start mb-6';
+                aiMessageDiv.innerHTML = `
+                    <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                        <p class="text-gray-800">I understand your question. This is a placeholder response. Connect this to your AI API to get real responses.</p>
+                    </div>
+                `;
+                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                if (messagesContainer) {
+                    messagesContainer.appendChild(aiMessageDiv);
+                }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 1000);
+        });
+        
+        // Allow Enter key to send (Shift+Enter for new line)
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>
+
