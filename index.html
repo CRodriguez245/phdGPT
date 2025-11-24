@@ -263,6 +263,23 @@
         .sent-message-checkmark {
             color: #000;
         }
+        /* Loading animation */
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-4px);
+            }
+        }
+        .animate-bounce {
+            animation: bounce 1s infinite;
+        }
+        /* Disabled input styling */
+        input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="bg-white h-screen overflow-hidden">
@@ -610,6 +627,75 @@
         const closeSentMessage = document.getElementById('closeSentMessage');
         const notificationToast = document.getElementById('notificationToast');
         
+        // Conversation history to maintain context
+        let conversationHistory = [];
+        
+        // Function to add message to chat
+        function addMessageToChat(text, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isUser ? 'flex justify-end mb-6' : 'flex justify-start mb-6';
+            
+            if (isUser) {
+                messageDiv.innerHTML = `
+                    <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
+                        <p class="text-gray-800">${escapeHtml(text)}</p>
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                        <p class="text-gray-800">${escapeHtml(text)}</p>
+                    </div>
+                `;
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                messagesContainer.appendChild(messageDiv);
+            }
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Function to add loading indicator
+        function addLoadingIndicator() {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingIndicator';
+            loadingDiv.className = 'flex justify-start mb-6';
+            loadingDiv.innerHTML = `
+                <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <div class="flex gap-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                        </div>
+                        <span class="text-gray-500 text-sm">Thinking...</span>
+                    </div>
+                </div>
+            `;
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                messagesContainer.appendChild(loadingDiv);
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Function to remove loading indicator
+        function removeLoadingIndicator() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+        }
+        
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         // Branch button functionality
         branchButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -763,46 +849,86 @@
             }
         });
         
-        chatForm.addEventListener('submit', (e) => {
+        chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const message = messageInput.value.trim();
             
             if (!message) return;
             
-            // Add user message
-            const userMessageDiv = document.createElement('div');
-            userMessageDiv.className = 'flex justify-end mb-6';
-            userMessageDiv.innerHTML = `
-                <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
-                    <p class="text-gray-800">${message}</p>
-                </div>
-            `;
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
-            if (messagesContainer) {
-                messagesContainer.appendChild(userMessageDiv);
-            }
+            // Disable input while processing
+            messageInput.disabled = true;
+            
+            // Add user message to chat
+            addMessageToChat(message, true);
+            
+            // Add user message to conversation history
+            conversationHistory.push({
+                role: 'user',
+                content: message
+            });
             
             // Clear input
             messageInput.value = '';
             
-            // Scroll to bottom
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Show loading indicator
+            addLoadingIndicator();
             
-            // Simulate AI response (you can replace this with actual API call)
-            setTimeout(() => {
-                const aiMessageDiv = document.createElement('div');
-                aiMessageDiv.className = 'flex justify-start mb-6';
-                aiMessageDiv.innerHTML = `
-                    <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                        <p class="text-gray-800">I understand your question. This is a placeholder response. Connect this to your AI API to get real responses.</p>
+            try {
+                // Call API endpoint
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversationHistory: conversationHistory.slice(0, -1) // Send all but the current message
+                    })
+                });
+                
+                // Remove loading indicator
+                removeLoadingIndicator();
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to get response');
+                }
+                
+                const data = await response.json();
+                
+                // Add assistant message to conversation history
+                conversationHistory.push({
+                    role: 'assistant',
+                    content: data.message
+                });
+                
+                // Add AI response to chat
+                addMessageToChat(data.message, false);
+                
+            } catch (error) {
+                // Remove loading indicator
+                removeLoadingIndicator();
+                
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'flex justify-start mb-6';
+                errorDiv.innerHTML = `
+                    <div class="ai-message-bubble max-w-[85%] bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+                        <p class="text-red-800">Error: ${escapeHtml(error.message)}</p>
                     </div>
                 `;
                 const messagesContainer = chatMessages.querySelector('.max-w-2xl');
                 if (messagesContainer) {
-                    messagesContainer.appendChild(aiMessageDiv);
+                    messagesContainer.appendChild(errorDiv);
                 }
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-            }, 1000);
+                
+                console.error('Error calling API:', error);
+            } finally {
+                // Re-enable input
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
         });
         
         // Allow Enter key to send (Shift+Enter for new line)
