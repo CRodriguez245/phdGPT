@@ -137,6 +137,62 @@
         .share-tooltip-content {
             padding: 16px;
         }
+        /* Share scope radio buttons */
+        .share-tooltip-content input[type="radio"] {
+            cursor: pointer;
+        }
+        .share-tooltip-content label {
+            user-select: none;
+        }
+        /* Message selection for sharing */
+        .message-selectable {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        /* Only make clickable in share mode */
+        body.share-mode .message-selectable {
+            cursor: pointer;
+        }
+        body.share-mode .message-selectable:hover {
+            opacity: 0.9;
+            transform: scale(1.01);
+        }
+        /* Selected message styling */
+        .message-selectable.selected {
+            position: relative;
+        }
+        .message-selectable.selected > div {
+            box-shadow: 0 0 0 3px #3b82f6 !important;
+            border-radius: 12px !important;
+        }
+        .message-selectable.selected::after {
+            content: '✓';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #3b82f6;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+            pointer-events: none;
+        }
+        /* Position checkmark for right-aligned messages */
+        .flex.justify-end.message-selectable.selected::after {
+            right: auto;
+            left: -8px;
+        }
+        .share-tooltip-content input[type="radio"]:disabled + span {
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
         .share-tooltip-textarea {
             width: 100%;
             min-height: 120px;
@@ -468,10 +524,14 @@
                             </button>
                         </div>
                         <div class="share-tooltip-content">
+                            <div id="selectedMessagesPreview" class="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600" style="display: none;">
+                                <p class="font-medium mb-2">Selected messages:</p>
+                                <div id="selectedMessagesList" class="max-h-32 overflow-y-auto"></div>
+                            </div>
                             <textarea 
                                 id="tooltipTextarea" 
                                 class="share-tooltip-textarea" 
-                                placeholder="This is what I prompted. Unsure if others would agree these are appropriate process indicators. Let me know what you think."
+                                placeholder="Add a note about what you're sharing..."
                             ></textarea>
                         </div>
                         <div id="shareTooltipFooter" class="share-tooltip-footer">
@@ -583,7 +643,7 @@
             <div class="flex-1 overflow-y-auto custom-scrollbar py-8" id="chatMessages">
                 <div class="max-w-2xl mx-auto px-6">
                     <!-- User Message -->
-                    <div class="flex justify-end mb-6">
+                    <div class="flex justify-end mb-6 message-selectable">
                         <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
                             <p class="text-gray-800">
                                 Hey, I'm designing a study to evaluate how novice researchers use AI tools during literature review. I want to compare three workflows: baseline, AI-summaries, and AI-guided questioning. I'm stuck on how to operationalize "depth of understanding." Any suggestions?
@@ -592,7 +652,7 @@
                     </div>
                     
                     <!-- AI Message -->
-                    <div class="flex justify-start mb-6">
+                    <div class="flex justify-start mb-6 message-selectable">
                         <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
                             <p class="text-gray-800">
                                 Sure — "depth of understanding" in HCI literature is often operationalized across three dimensions: 1. Breadth (coverage of core ideas, concepts identified) 2. Accuracy (correctness vs hallucination/overgeneralization) 3. Structure (how well connections are made between concepts) You can turn those into a rubric: • 0-2 points per dimension • Evaluate written summaries, outlines, or concept maps • Inter-rater reliability check using Cohen's k Would you like me to draft the rubric?
@@ -601,7 +661,7 @@
                     </div>
                     
                     <!-- User Message -->
-                    <div class="flex justify-end mb-6">
+                    <div class="flex justify-end mb-6 message-selectable">
                         <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
                             <p class="text-gray-800">
                                 Yes — but I'm worried reviewers will say rubric scoring is subjective. Should I include behavioral metrics?
@@ -610,7 +670,7 @@
                     </div>
                     
                     <!-- AI Message -->
-                    <div class="flex justify-start mb-6">
+                    <div class="flex justify-start mb-6 message-selectable">
                         <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
                             <p class="text-gray-800">
                                 Great instinct. Add process-level indicators, which pair nicely with rubric scoring: • Time • Number of sources consulted • Switching behavior (e.g., toggling between article and notes) • Latency before taking first note
@@ -1113,6 +1173,24 @@
                 const existingHistory = [];
                 
                 messageDivs.forEach(div => {
+                    // Add message-selectable class and click handler to existing messages
+                    if (!div.classList.contains('message-selectable')) {
+                        div.classList.add('message-selectable');
+                        div.dataset.messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                        
+                        // Add click handler for message selection
+                        div.addEventListener('click', (e) => {
+                            if (document.body.classList.contains('share-mode')) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                div.classList.toggle('selected');
+                                updateSelectedMessages();
+                                // Force a reflow to ensure CSS is applied
+                                div.offsetHeight;
+                            }
+                        });
+                    }
+                    
                     const messageText = div.querySelector('p');
                     if (messageText) {
                         const isUser = div.classList.contains('justify-end');
@@ -1332,7 +1410,11 @@
                 className += ' branch-message';
             }
             
+            // Add message-selectable class for sharing functionality
+            className += ' message-selectable';
+            
             messageDiv.className = className;
+            messageDiv.dataset.messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             
             if (isUser) {
                 messageDiv.innerHTML = `
@@ -1349,6 +1431,22 @@
                     </div>
                 `;
             }
+            
+            // Add click handler for message selection (only in share mode)
+            messageDiv.addEventListener('click', (e) => {
+                if (document.body.classList.contains('share-mode')) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const isSelected = messageDiv.classList.contains('selected');
+                    if (isSelected) {
+                        messageDiv.classList.remove('selected');
+                    } else {
+                        messageDiv.classList.add('selected');
+                    }
+                    updateSelectedMessages();
+                    console.log('Message toggled, now selected:', !isSelected);
+                }
+            });
             
             const messagesContainer = chatMessages.querySelector('.max-w-2xl');
             if (messagesContainer) {
@@ -1473,19 +1571,80 @@
             document.body.classList.remove('share-mode');
         });
         
+        // Track selected messages for sharing
+        let selectedMessages = new Set();
+        
+        // Function to update selected messages set
+        function updateSelectedMessages() {
+            selectedMessages.clear();
+            document.querySelectorAll('.message-selectable.selected').forEach(msg => {
+                selectedMessages.add(msg);
+            });
+        }
+        
+        // Function to get content from selected messages
+        function getSelectedMessagesContent() {
+            if (selectedMessages.size === 0) return '';
+            
+            const messages = [];
+            const messageDivs = Array.from(selectedMessages).sort((a, b) => {
+                // Sort by position in DOM
+                return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+            });
+            
+            messageDivs.forEach(div => {
+                const isUser = div.classList.contains('justify-end');
+                let content = '';
+                
+                if (isUser) {
+                    const messageText = div.querySelector('p');
+                    if (messageText) {
+                        content = messageText.textContent.trim();
+                    }
+                } else {
+                    // For AI messages, get text from formatted content
+                    const messageContent = div.querySelector('.prose') || 
+                                          div.querySelector('.ai-message-bubble > div') ||
+                                          div.querySelector('div > div') ||
+                                          div.querySelector('p');
+                    if (messageContent) {
+                        content = messageContent.textContent.trim();
+                    }
+                }
+                
+                if (content) {
+                    const prefix = isUser ? 'You: ' : 'AI: ';
+                    messages.push(prefix + content);
+                }
+            });
+            
+            return messages.join('\n\n');
+        }
+        
         // Share button functionality
         shareButton.addEventListener('click', (e) => {
             e.stopPropagation();
+            
             const isShowing = shareDropdown.classList.toggle('show');
             
             // Close branch dropdown if open
             branchDropdown.classList.remove('show');
             
-            // Toggle zoom on chat messages
+            // Toggle zoom on chat messages and enable selection mode
             if (isShowing) {
                 document.body.classList.add('share-mode');
+                // Clear any previous selections
+                document.querySelectorAll('.message-selectable.selected').forEach(msg => {
+                    msg.classList.remove('selected');
+                });
+                selectedMessages.clear();
             } else {
                 document.body.classList.remove('share-mode');
+                // Clear selections when closing share mode
+                document.querySelectorAll('.message-selectable.selected').forEach(msg => {
+                    msg.classList.remove('selected');
+                });
+                selectedMessages.clear();
             }
         });
         
@@ -1653,6 +1812,88 @@
             });
         });
         
+        // Function to get full chat content
+        function getFullChatContent() {
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (!messagesContainer) return '';
+            
+            const messages = [];
+            const messageDivs = messagesContainer.querySelectorAll('.flex');
+            
+            messageDivs.forEach(div => {
+                const isUser = div.classList.contains('justify-end');
+                let content = '';
+                
+                if (isUser) {
+                    const messageText = div.querySelector('p');
+                    if (messageText) {
+                        content = messageText.textContent.trim();
+                    }
+                } else {
+                    // For AI messages, get text from formatted content
+                    const messageContent = div.querySelector('.prose') || 
+                                          div.querySelector('.ai-message-bubble > div') ||
+                                          div.querySelector('div > div') ||
+                                          div.querySelector('p');
+                    if (messageContent) {
+                        content = messageContent.textContent.trim();
+                    }
+                }
+                
+                if (content) {
+                    const prefix = isUser ? 'You: ' : 'AI: ';
+                    messages.push(prefix + content);
+                }
+            });
+            
+            return messages.join('\n\n');
+        }
+        
+        // Function to update selected messages preview
+        function updateSelectedMessagesPreview() {
+            const previewDiv = document.getElementById('selectedMessagesPreview');
+            const listDiv = document.getElementById('selectedMessagesList');
+            
+            if (selectedMessages.size > 0) {
+                previewDiv.style.display = 'block';
+                const messages = Array.from(selectedMessages).sort((a, b) => {
+                    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+                });
+                
+                listDiv.innerHTML = '';
+                messages.forEach((msgDiv, index) => {
+                    const isUser = msgDiv.classList.contains('justify-end');
+                    let content = '';
+                    
+                    if (isUser) {
+                        const messageText = msgDiv.querySelector('p');
+                        if (messageText) {
+                            content = messageText.textContent.trim();
+                        }
+                    } else {
+                        const messageContent = msgDiv.querySelector('.prose') || 
+                                              msgDiv.querySelector('.ai-message-bubble > div') ||
+                                              msgDiv.querySelector('div > div') ||
+                                              msgDiv.querySelector('p');
+                        if (messageContent) {
+                            content = messageContent.textContent.trim();
+                        }
+                    }
+                    
+                    if (content) {
+                        const prefix = isUser ? 'You' : 'AI';
+                        const preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
+                        const item = document.createElement('div');
+                        item.className = 'text-xs mb-1';
+                        item.textContent = `${prefix}: ${preview}`;
+                        listDiv.appendChild(item);
+                    }
+                });
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        }
+        
         // Handle clicking on a person in the share dropdown
         document.querySelectorAll('.share-person').forEach(person => {
             person.addEventListener('click', (e) => {
@@ -1664,6 +1905,15 @@
                 // Hide dropdown
                 shareDropdown.classList.remove('show');
                 
+                // Check if any messages are selected
+                updateSelectedMessages();
+                
+                if (selectedMessages.size === 0) {
+                    // If no messages selected, show a message
+                    alert('Please select one or more messages to share. Click on message bubbles to select them.');
+                    return;
+                }
+                
                 // Update tooltip with person's info
                 tooltipAvatar.textContent = initial;
                 if (color.startsWith('#')) {
@@ -1674,7 +1924,13 @@
                     tooltipAvatar.style.backgroundColor = '';
                 }
                 tooltipName.textContent = name;
+                
+                // Update preview of selected messages
+                updateSelectedMessagesPreview();
+                
+                // Clear textarea for note
                 tooltipTextarea.value = '';
+                tooltipTextarea.placeholder = 'Add a note about what you\'re sharing...';
                 
                 // Reset footer to show Send button (remove sent state)
                 shareTooltipFooter.classList.remove('sent');
@@ -1699,30 +1955,53 @@
             sendTooltip.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const message = tooltipTextarea ? tooltipTextarea.value.trim() : '';
-                console.log('Send button clicked, message:', message);
                 
-                if (message) {
-                    // Here you would send the message to the selected person
-                    console.log(`Sending to ${tooltipName ? tooltipName.textContent : 'unknown'}: ${message}`);
-                    
-                    // Close share tooltip immediately
-                    if (shareTooltip) shareTooltip.classList.remove('show');
-                    if (shareTooltipBackdrop) shareTooltipBackdrop.classList.remove('show');
-                    document.body.classList.remove('share-mode');
-                    
-                    // Show notification toast
-                    if (notificationToast) {
-                        notificationToast.classList.add('show');
-                        
-                        // Hide notification after 3 seconds
-                        setTimeout(() => {
-                            notificationToast.classList.remove('show');
-                        }, 3000);
-                    }
+                // Get the note from textarea
+                const note = tooltipTextarea ? tooltipTextarea.value.trim() : '';
+                
+                // Get selected messages content
+                const selectedContent = getSelectedMessagesContent();
+                
+                if (selectedMessages.size === 0) {
+                    alert('Please select at least one message to share.');
+                    return;
+                }
+                
+                // Combine note and selected messages
+                let fullMessage = '';
+                if (note) {
+                    fullMessage = note + '\n\n---\n\n' + selectedContent;
                 } else {
-                    console.log('No message to send');
-                    alert('Please enter a message before sending.');
+                    fullMessage = selectedContent;
+                }
+                
+                console.log('Send button clicked');
+                console.log(`Sending to ${tooltipName ? tooltipName.textContent : 'unknown'}:`);
+                console.log('Note:', note);
+                console.log('Selected messages:', selectedContent);
+                
+                // Here you would send the message to the selected person
+                // For now, we'll just show a notification
+                
+                // Close share tooltip immediately
+                if (shareTooltip) shareTooltip.classList.remove('show');
+                if (shareTooltipBackdrop) shareTooltipBackdrop.classList.remove('show');
+                document.body.classList.remove('share-mode');
+                
+                // Clear selections
+                document.querySelectorAll('.message-selectable.selected').forEach(msg => {
+                    msg.classList.remove('selected');
+                });
+                selectedMessages.clear();
+                
+                // Show notification toast
+                if (notificationToast) {
+                    notificationToast.classList.add('show');
+                    
+                    // Hide notification after 3 seconds
+                    setTimeout(() => {
+                        notificationToast.classList.remove('show');
+                    }, 3000);
                 }
             });
         } else {
