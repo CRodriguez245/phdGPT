@@ -67,15 +67,28 @@
             transform: scale(0.75);
             transform-origin: top center;
         }
-        /* Change AI message bubbles to blue when Carlos is selected */
-        body.carlos-selected #chatMessages .ai-message-bubble {
+        /* Change user message bubbles to blue when Carlos is selected - only for messages after branch point */
+        body.carlos-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-100 {
             background-color: #90DFFB !important;
-            border-color: #90DFFB !important;
         }
-        /* Change AI message bubbles to green when Ted is selected */
-        body.ted-selected #chatMessages .ai-message-bubble {
+        /* Change user message bubbles to green when Ted is selected - only for messages after branch point */
+        body.ted-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-100 {
             background-color: #90FBCD !important;
-            border-color: #90FBCD !important;
+        }
+        /* Active branch person styling */
+        .branch-person.active {
+            background-color: #f3f4f6;
+        }
+        .branch-person.active > div > div[style*="background-color"] {
+            opacity: 0.5;
+            filter: brightness(0.6);
+        }
+        .branch-person.active span {
+            font-weight: 600;
+            color: #111827;
+        }
+        .branch-person.active svg {
+            color: #111827;
         }
         /* Share tooltip/comment box */
         .share-tooltip-backdrop {
@@ -201,8 +214,9 @@
         /* Notification toast */
         .notification-toast {
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             background: #10b981;
             color: white;
             padding: 12px 20px;
@@ -213,13 +227,12 @@
             align-items: center;
             gap: 8px;
             opacity: 0;
-            transform: translateY(-10px);
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
         .notification-toast.show {
             display: flex;
             opacity: 1;
-            transform: translateY(0);
+            transform: translate(-50%, -50%);
         }
         /* Sent message tooltip */
         .sent-message-tooltip {
@@ -280,6 +293,33 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
+        /* Search bar */
+        .search-bar {
+            display: none;
+            padding: 12px 16px;
+            border-bottom: 1px solid #374151;
+        }
+        .search-bar.show {
+            display: block;
+        }
+        .search-bar input {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: #4b5563;
+            border: 1px solid #6b7280;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar input:focus {
+            border-color: #3b82f6;
+            background-color: #4b5563;
+        }
+        .search-bar input::placeholder {
+            color: #9ca3af;
+        }
     </style>
 </head>
 <body class="bg-white h-screen overflow-hidden">
@@ -298,7 +338,7 @@
                     <div class="relative">
                         <button id="branchButton" class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full transition-colors text-gray-700 text-sm font-medium border border-gray-300">
                             <div class="branch-icon-wrapper w-4 h-4 bg-white flex items-center justify-center">
-                                <img src="images/branch icon.png" alt="Branch" class="w-4 h-4" />
+                                <img src="images/branch-icon.png" alt="Branch" class="w-4 h-4" />
                             </div>
                             <span>Branch</span>
                         </button>
@@ -342,10 +382,10 @@
                     <div class="relative share-button-wrapper">
                         <div class="share-button-container">
                             <button id="shareButton" class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full transition-colors text-gray-700 text-sm font-medium border border-gray-300">
-                                <span>Share</span>
                                 <div class="branch-icon-wrapper w-4 h-4 bg-white flex items-center justify-center">
-                                    <img src="images/export icon.png" alt="Share" class="w-4 h-4" />
+                                    <img src="images/export-icon.png" alt="Share" class="w-4 h-4" />
                                 </div>
+                                <span>Share</span>
                             </button>
                         </div>
                         <div id="shareCheckmark" class="share-checkmark">
@@ -464,13 +504,13 @@
             <!-- Navigation -->
             <nav class="flex-1">
                 <div class="p-4 space-y-2">
-                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
+                    <button id="newChatButton" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         <span>New chat</span>
                     </button>
-                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
+                    <button id="searchChatButton" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -485,26 +525,36 @@
                 </div>
             </nav>
             
+            <!-- Search Bar -->
+            <div id="searchBar" class="search-bar">
+                <input 
+                    type="text" 
+                    id="searchInput"
+                    placeholder="Search chats..." 
+                    autocomplete="off"
+                />
+            </div>
+            
             <!-- Chat History -->
             <div class="flex-1 overflow-y-auto custom-scrollbar p-4">
                 <h2 class="text-sm font-semibold text-gray-400 mb-3 uppercase">Chats</h2>
-                <div class="space-y-1">
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                <div id="chatHistoryList" class="space-y-1">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="typo-assistance-1">
                         Typo Assistance Request
                     </button>
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="generate-images-sora">
                         Generate images on Sora
                     </button>
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="urban-green-spaces">
                         Urban Green Spaces
                     </button>
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="typo-assistance-2">
                         Typo Assistance Request
                     </button>
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="workshop-agenda">
                         Workshop agenda creation
                     </button>
-                    <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="section-1-structure">
                         Section 1 structure
                     </button>
                 </div>
@@ -626,14 +676,663 @@
         const sentMessageText = document.getElementById('sentMessageText');
         const closeSentMessage = document.getElementById('closeSentMessage');
         const notificationToast = document.getElementById('notificationToast');
+        const newChatButton = document.getElementById('newChatButton');
+        const searchChatButton = document.getElementById('searchChatButton');
+        const searchBar = document.getElementById('searchBar');
+        const searchInput = document.getElementById('searchInput');
+        const chatHistoryList = document.getElementById('chatHistoryList');
         
         // Conversation history to maintain context
         let conversationHistory = [];
+        let currentChatId = null;
+        let currentBranch = null; // Track current branch (person)
+        let branchPoint = null; // Track where the branch started (message index)
+        
+        // Chat storage functions
+        function getChats() {
+            const chats = localStorage.getItem('phdgpt_chats');
+            return chats ? JSON.parse(chats) : {};
+        }
+        
+        function saveChats(chats) {
+            localStorage.setItem('phdgpt_chats', JSON.stringify(chats));
+        }
+        
+        function getChat(chatId) {
+            const chats = getChats();
+            return chats[chatId] || null;
+        }
+        
+        function saveChat(chatId, chatData) {
+            const chats = getChats();
+            chats[chatId] = chatData;
+            saveChats(chats);
+        }
+        
+        // Initialize sample chats if they don't exist
+        function initializeSampleChats() {
+            const chats = getChats();
+            
+            // Sample chat data
+            const sampleChats = {
+                'typo-assistance-1': {
+                    title: 'Typo Assistance Request',
+                    messages: [
+                        { role: 'user', content: 'Can you help me check for typos in my abstract?' },
+                        { role: 'assistant', content: 'I\'d be happy to help you check for typos in your abstract. Please share the text you\'d like me to review.' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'Can you help me check for typos in my abstract?' },
+                        { role: 'assistant', content: 'I\'d be happy to help you check for typos in your abstract. Please share the text you\'d like me to review.' }
+                    ]
+                },
+                'generate-images-sora': {
+                    title: 'Generate images on Sora',
+                    messages: [
+                        { role: 'user', content: 'How can I generate images using Sora?' },
+                        { role: 'assistant', content: 'Sora is OpenAI\'s text-to-video model. For generating images, you might want to use DALL-E or Midjourney instead. However, if you\'re interested in video generation with Sora, I can help explain how that works.' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'How can I generate images using Sora?' },
+                        { role: 'assistant', content: 'Sora is OpenAI\'s text-to-video model. For generating images, you might want to use DALL-E or Midjourney instead. However, if you\'re interested in video generation with Sora, I can help explain how that works.' }
+                    ]
+                },
+                'urban-green-spaces': {
+                    title: 'Urban Green Spaces',
+                    messages: [
+                        { role: 'user', content: 'What are the benefits of urban green spaces?' },
+                        { role: 'assistant', content: 'Urban green spaces provide numerous benefits including improved air quality, reduced urban heat island effects, enhanced mental health, increased biodiversity, and opportunities for recreation and social interaction.' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'What are the benefits of urban green spaces?' },
+                        { role: 'assistant', content: 'Urban green spaces provide numerous benefits including improved air quality, reduced urban heat island effects, enhanced mental health, increased biodiversity, and opportunities for recreation and social interaction.' }
+                    ]
+                },
+                'typo-assistance-2': {
+                    title: 'Typo Assistance Request',
+                    messages: [
+                        { role: 'user', content: 'I need help proofreading my introduction section.' },
+                        { role: 'assistant', content: 'I can help you proofread your introduction. Please share the text, and I\'ll review it for typos, grammar, and clarity.' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'I need help proofreading my introduction section.' },
+                        { role: 'assistant', content: 'I can help you proofread your introduction. Please share the text, and I\'ll review it for typos, grammar, and clarity.' }
+                    ]
+                },
+                'workshop-agenda': {
+                    title: 'Workshop agenda creation',
+                    messages: [
+                        { role: 'user', content: 'Help me create an agenda for a research workshop.' },
+                        { role: 'assistant', content: 'I\'d be happy to help you create a workshop agenda. What is the topic of the workshop, how long will it be, and what are the main objectives?' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'Help me create an agenda for a research workshop.' },
+                        { role: 'assistant', content: 'I\'d be happy to help you create a workshop agenda. What is the topic of the workshop, how long will it be, and what are the main objectives?' }
+                    ]
+                },
+                'section-1-structure': {
+                    title: 'Section 1 structure',
+                    messages: [
+                        { role: 'user', content: 'How should I structure the first section of my paper?' },
+                        { role: 'assistant', content: 'The first section typically serves as an introduction. It should include: 1) Context and background, 2) Problem statement, 3) Research objectives/questions, 4) Paper structure overview. Would you like help with any specific part?' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'How should I structure the first section of my paper?' },
+                        { role: 'assistant', content: 'The first section typically serves as an introduction. It should include: 1) Context and background, 2) Problem statement, 3) Research objectives/questions, 4) Paper structure overview. Would you like help with any specific part?' }
+                    ]
+                }
+            };
+            
+            // Only initialize if chats don't exist
+            if (Object.keys(chats).length === 0) {
+                saveChats(sampleChats);
+            }
+        }
+        
+        // Load a chat by ID
+        function loadChat(chatId) {
+            const chat = getChat(chatId);
+            if (!chat) {
+                console.error('Chat not found:', chatId);
+                return;
+            }
+            
+            currentChatId = chatId;
+            currentBranch = chat.currentBranch || null;
+            branchPoint = chat.branchPoint || null;
+            
+            // Load the appropriate conversation history based on branch
+            if (currentBranch && chat.branches && chat.branches[currentBranch]) {
+                conversationHistory = chat.branches[currentBranch].conversationHistory || [];
+            } else {
+                conversationHistory = chat.conversationHistory || [];
+            }
+            
+            // Clear current messages
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = '';
+            }
+            
+            // Load messages from the appropriate branch
+            let messagesToLoad = [];
+            let branchPointIndex = null;
+            if (currentBranch && chat.branches && chat.branches[currentBranch]) {
+                messagesToLoad = chat.branches[currentBranch].messages || [];
+                branchPointIndex = chat.branches[currentBranch].branchPoint || null;
+            } else {
+                messagesToLoad = chat.messages || [];
+            }
+            
+            if (messagesToLoad.length > 0) {
+                messagesToLoad.forEach((msg, index) => {
+                    // Messages after the branch point should be marked as branch messages
+                    const isBranchMsg = currentBranch && branchPointIndex !== null && index >= branchPointIndex;
+                    addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                });
+            }
+            
+            // Clear input and focus
+            messageInput.value = '';
+            messageInput.disabled = false;
+            messageInput.focus();
+            
+            // Remove any loading indicators
+            removeLoadingIndicator();
+            
+            // Close any open dropdowns
+            branchDropdown.classList.remove('show');
+            shareDropdown.classList.remove('show');
+            
+            // Close any open tooltips
+            shareTooltip.classList.remove('show');
+            shareTooltipBackdrop.classList.remove('show');
+            sentMessageTooltip.classList.remove('show');
+            
+            // Set UI state based on current branch
+            document.body.classList.remove('share-mode', 'carlos-selected', 'ted-selected');
+            if (currentBranch === 'Carlos R.') {
+                document.body.classList.add('carlos-selected');
+            } else if (currentBranch === 'Ted S.') {
+                document.body.classList.add('ted-selected');
+            }
+            
+            // Update branch person active state
+            updateBranchPersonActiveState(currentBranch);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Save current chat
+        function saveCurrentChat() {
+            if (!currentChatId) return;
+            
+            const chat = getChat(currentChatId);
+            if (chat) {
+                // Initialize branches object if it doesn't exist
+                if (!chat.branches) {
+                    chat.branches = {};
+                }
+                
+                // CRITICAL: Only update the conversation history for the CURRENT view
+                // Never mix branch and main conversation histories
+                if (currentBranch && chat.branches && chat.branches[currentBranch]) {
+                    // Save to CURRENT branch only - create a deep copy
+                    chat.branches[currentBranch].conversationHistory = JSON.parse(JSON.stringify(conversationHistory));
+                } else if (!currentBranch) {
+                    // Save to main conversation only - create a deep copy
+                    chat.conversationHistory = JSON.parse(JSON.stringify(conversationHistory));
+                }
+                
+                // Update messages from DOM
+                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                if (messagesContainer) {
+                    const messageDivs = messagesContainer.querySelectorAll('.flex');
+                    const messages = [];
+                    messageDivs.forEach(div => {
+                        // For user messages, get text from p tag
+                        // For AI messages, get text from the formatted div (need to extract from HTML)
+                        const isUser = div.classList.contains('justify-end');
+                        let content = '';
+                        
+                        if (isUser) {
+                            const messageText = div.querySelector('p');
+                            if (messageText) {
+                                content = messageText.textContent.trim();
+                            }
+                        } else {
+                            // For AI messages, get text from the formatted content div
+                            // Try multiple selectors to find the content
+                            const messageContent = div.querySelector('.prose') || 
+                                                  div.querySelector('.ai-message-bubble > div') ||
+                                                  div.querySelector('div > div') ||
+                                                  div.querySelector('p');
+                            if (messageContent) {
+                                // Extract plain text from the formatted HTML
+                                content = messageContent.textContent.trim();
+                            } else {
+                                // Last resort: get all text from the div
+                                content = div.textContent.trim();
+                            }
+                        }
+                        
+                        if (content) {
+                            messages.push({
+                                role: isUser ? 'user' : 'assistant',
+                                content: content
+                            });
+                        }
+                    });
+                    
+                    // CRITICAL: Save messages to appropriate location - create a deep copy
+                    // IMPORTANT: Only save to the current branch or main, never mix them
+                    // The DOM should only contain messages for the current view at this point
+                    if (currentBranch && chat.branches && chat.branches[currentBranch]) {
+                        // Save to CURRENT branch only - do not touch other branches or main conversation
+                        const branchToUpdate = chat.branches[currentBranch];
+                        branchToUpdate.messages = JSON.parse(JSON.stringify(messages));
+                        // Preserve initialized flag if it exists
+                        if (branchToUpdate.initialized === undefined) {
+                            branchToUpdate.initialized = false;
+                        }
+                        // Explicitly ensure we don't modify main conversation when in a branch
+                        // chat.messages should remain unchanged
+                    } else if (!currentBranch) {
+                        // Save to main conversation only - do not touch any branches
+                        chat.messages = JSON.parse(JSON.stringify(messages));
+                        // Explicitly ensure branches are not modified when in main view
+                        // All branch data should remain unchanged
+                    }
+                }
+                
+                // Save branch info
+                chat.currentBranch = currentBranch;
+                chat.branchPoint = branchPoint;
+                
+                saveChat(currentChatId, chat);
+            }
+        }
+        
+        // Function to start a new chat
+        function startNewChat() {
+            // Save current chat before starting new one
+            if (currentChatId) {
+                saveCurrentChat();
+            }
+            
+            // Clear conversation history
+            conversationHistory = [];
+            currentChatId = null;
+            currentBranch = null;
+            branchPoint = null;
+            
+            // Clear all chat messages except the container structure
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = '';
+            }
+            
+            // Clear input field
+            messageInput.value = '';
+            messageInput.disabled = false;
+            messageInput.focus();
+            
+            // Remove any loading indicators
+            removeLoadingIndicator();
+            
+            // Close any open dropdowns
+            branchDropdown.classList.remove('show');
+            shareDropdown.classList.remove('show');
+            
+            // Close any open tooltips
+            shareTooltip.classList.remove('show');
+            shareTooltipBackdrop.classList.remove('show');
+            sentMessageTooltip.classList.remove('show');
+            
+            // Reset UI states
+            document.body.classList.remove('share-mode', 'carlos-selected', 'ted-selected');
+            
+            // Update branch person active state (none active for new chat)
+            updateBranchPersonActiveState(null);
+            
+            // Scroll to top
+            chatMessages.scrollTop = 0;
+        }
+        
+        // New chat button functionality
+        newChatButton.addEventListener('click', startNewChat);
+        
+        // Search chat button functionality
+        searchChatButton.addEventListener('click', () => {
+            searchBar.classList.toggle('show');
+            if (searchBar.classList.contains('show')) {
+                searchInput.focus();
+            } else {
+                searchInput.value = '';
+                filterChats('');
+            }
+        });
+        
+        // Search input functionality
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            filterChats(query);
+        });
+        
+        // Close search bar when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchChatButton.contains(e.target) && !searchBar.contains(e.target)) {
+                if (searchInput.value.trim() === '') {
+                    searchBar.classList.remove('show');
+                }
+            }
+        });
+        
+        // Function to filter chats based on search query
+        function filterChats(query) {
+            const chatItems = chatHistoryList.querySelectorAll('.chat-history-item');
+            const chats = getChats();
+            
+            chatItems.forEach(item => {
+                const chatId = item.dataset.chatId;
+                const chat = chats[chatId];
+                
+                if (!query) {
+                    // Show all chats if no query
+                    item.style.display = 'block';
+                    return;
+                }
+                
+                // Check if chat title matches query
+                const title = chat ? chat.title.toLowerCase() : item.textContent.toLowerCase();
+                const matchesTitle = title.includes(query);
+                
+                // Check if any message content matches query
+                let matchesContent = false;
+                if (chat && chat.messages) {
+                    matchesContent = chat.messages.some(msg => 
+                        msg.content.toLowerCase().includes(query)
+                    );
+                }
+                
+                // Show if title or content matches
+                if (matchesTitle || matchesContent) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+        
+        // Function to render chat history list
+        function renderChatHistory() {
+            const chats = getChats();
+            chatHistoryList.innerHTML = '';
+            
+            // Sort chats by most recent (you might want to add timestamps)
+            const chatEntries = Object.entries(chats);
+            
+            chatEntries.forEach(([chatId, chat]) => {
+                const button = document.createElement('button');
+                button.className = 'chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate';
+                button.dataset.chatId = chatId;
+                button.textContent = chat.title || 'Untitled Chat';
+                
+                button.addEventListener('click', () => {
+                    loadChat(chatId);
+                });
+                
+                chatHistoryList.appendChild(button);
+            });
+        }
+        
+        // Chat history item click handlers
+        document.querySelectorAll('.chat-history-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const chatId = item.dataset.chatId;
+                if (chatId) {
+                    loadChat(chatId);
+                }
+            });
+        });
+        
+        // Initialize sample chats on page load
+        initializeSampleChats();
+        
+        // Render chat history on page load
+        renderChatHistory();
+        
+        // Initialize current chat from existing HTML messages on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            if (messagesContainer) {
+                // Extract messages from existing HTML
+                const messageDivs = messagesContainer.querySelectorAll('.flex');
+                const existingMessages = [];
+                const existingHistory = [];
+                
+                messageDivs.forEach(div => {
+                    const messageText = div.querySelector('p');
+                    if (messageText) {
+                        const isUser = div.classList.contains('justify-end');
+                        const content = messageText.textContent.trim();
+                        if (content) {
+                            existingMessages.push({
+                                role: isUser ? 'user' : 'assistant',
+                                content: content
+                            });
+                            existingHistory.push({
+                                role: isUser ? 'user' : 'assistant',
+                                content: content
+                            });
+                        }
+                    }
+                });
+                
+                // If there are existing messages, set up the current chat
+                if (existingMessages.length > 0 && !currentChatId) {
+                    const initialChatId = 'current-chat';
+                    currentChatId = initialChatId;
+                    
+                    // Generate title from first user message
+                    const firstUserMessage = existingMessages.find(m => m.role === 'user');
+                    const title = firstUserMessage 
+                        ? (firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : ''))
+                        : 'Current Chat';
+                    
+                    const initialChat = {
+                        title: title,
+                        messages: existingMessages,
+                        conversationHistory: existingHistory
+                    };
+                    
+                    // Save to localStorage
+                    const chats = getChats();
+                    if (!chats[initialChatId]) {
+                        saveChat(initialChatId, initialChat);
+                    } else {
+                        // Update existing chat with current messages
+                        chats[initialChatId] = initialChat;
+                        saveChats(chats);
+                    }
+                    
+                    // Set conversation history
+                    conversationHistory = existingHistory;
+                }
+            }
+        });
+        
+        // Function to convert markdown to HTML
+        function markdownToHtml(text) {
+            if (!text) return '';
+            
+            // Helper to escape HTML but preserve already-processed HTML tags
+            function escapeText(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Helper to process inline formatting in already-escaped text
+            function processInlineFormatting(text) {
+                // Bold - must not be inside code blocks
+                text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
+                // Italic - must not be inside code blocks or bold
+                text = text.replace(/(?<!\*)\*(?!\*)([^*]+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+                text = text.replace(/(?<!_)_(?!_)([^_]+?)(?<!_)_(?!_)/g, '<em>$1</em>');
+                return text;
+            }
+            
+            // Split text preserving code blocks
+            const codeBlockRegex = /```([\s\S]*?)```/g;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+            
+            while ((match = codeBlockRegex.exec(text)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
+                }
+                parts.push({ type: 'code', content: match[1] });
+                lastIndex = match.index + match[0].length;
+            }
+            if (lastIndex < text.length) {
+                parts.push({ type: 'text', content: text.substring(lastIndex) });
+            }
+            
+            if (parts.length === 0) {
+                parts.push({ type: 'text', content: text });
+            }
+            
+            // Process each part
+            const processedParts = parts.map(part => {
+                if (part.type === 'code') {
+                    return '<pre class="bg-gray-100 p-3 rounded-lg my-2 overflow-x-auto text-sm"><code>' + escapeText(part.content.trim()) + '</code></pre>';
+                } else {
+                    // Process text part
+                    let content = part.content;
+                    
+                    // Handle inline code first (before other formatting)
+                    content = content.replace(/`([^`\n]+)`/g, function(match, code) {
+                        return '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">' + escapeText(code) + '</code>';
+                    });
+                    
+                    // Split into lines
+                    const lines = content.split('\n');
+                    const result = [];
+                    let inList = false;
+                    let listItems = [];
+                    
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        let processed = false;
+                        
+                        // Headers
+                        if (line.match(/^### (.*)$/)) {
+                            if (inList) {
+                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                listItems = [];
+                                inList = false;
+                            }
+                            const headerText = processInlineFormatting(escapeText(line.replace(/^### /, '')));
+                            result.push('<h3 class="font-semibold text-lg mt-4 mb-2">' + headerText + '</h3>');
+                            processed = true;
+                        } else if (line.match(/^## (.*)$/)) {
+                            if (inList) {
+                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                listItems = [];
+                                inList = false;
+                            }
+                            const headerText = processInlineFormatting(escapeText(line.replace(/^## /, '')));
+                            result.push('<h2 class="font-semibold text-xl mt-4 mb-2">' + headerText + '</h2>');
+                            processed = true;
+                        } else if (line.match(/^# (.*)$/)) {
+                            if (inList) {
+                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                listItems = [];
+                                inList = false;
+                            }
+                            const headerText = processInlineFormatting(escapeText(line.replace(/^# /, '')));
+                            result.push('<h1 class="font-bold text-2xl mt-4 mb-2">' + headerText + '</h1>');
+                            processed = true;
+                        }
+                        // Lists
+                        else if (line.match(/^[\*\-\•] (.*)$/) || line.match(/^\d+\. (.*)$/)) {
+                            if (!inList) {
+                                inList = true;
+                            }
+                            let listContent = line.replace(/^[\*\-\•] /, '').replace(/^\d+\. /, '');
+                            listContent = processInlineFormatting(escapeText(listContent));
+                            listItems.push('<li class="ml-4 mb-1">' + listContent + '</li>');
+                            processed = true;
+                        }
+                        // Empty line
+                        else if (line.trim() === '') {
+                            if (inList) {
+                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                listItems = [];
+                                inList = false;
+                            }
+                            if (result.length > 0 && !result[result.length - 1].match(/<\/(p|h1|h2|h3|ul|pre)>$/)) {
+                                result.push('</p><p class="mb-2">');
+                            }
+                            processed = true;
+                        }
+                        
+                        // Regular paragraph text
+                        if (!processed) {
+                            if (inList) {
+                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                listItems = [];
+                                inList = false;
+                            }
+                            let paraContent = processInlineFormatting(escapeText(line));
+                            
+                            if (result.length === 0 || result[result.length - 1].match(/<\/(p|h1|h2|h3|ul|pre)>$/)) {
+                                result.push('<p class="mb-2">' + paraContent);
+                            } else {
+                                result[result.length - 1] += '<br>' + paraContent;
+                            }
+                        }
+                    }
+                    
+                    // Close any open list
+                    if (inList) {
+                        result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                    }
+                    
+                    // Close any open paragraph
+                    if (result.length > 0 && !result[result.length - 1].match(/<\/(p|h1|h2|h3|ul|pre)>$/)) {
+                        result[result.length - 1] += '</p>';
+                    }
+                    
+                    return result.join('');
+                }
+            });
+            
+            let html = processedParts.join('');
+            
+            // If no HTML was generated, wrap in paragraph
+            if (!html || html.trim() === '') {
+                html = '<p class="mb-2">' + escapeText(text) + '</p>';
+            }
+            
+            return html;
+        }
         
         // Function to add message to chat
-        function addMessageToChat(text, isUser = false) {
+        function addMessageToChat(text, isUser = false, isBranchMessage = false) {
             const messageDiv = document.createElement('div');
-            messageDiv.className = isUser ? 'flex justify-end mb-6' : 'flex justify-start mb-6';
+            let className = isUser ? 'flex justify-end mb-6' : 'flex justify-start mb-6';
+            
+            // Add branch-message class if this is a message after the branch point
+            if (isBranchMessage && isUser) {
+                className += ' branch-message';
+            }
+            
+            messageDiv.className = className;
             
             if (isUser) {
                 messageDiv.innerHTML = `
@@ -642,9 +1341,11 @@
                     </div>
                 `;
             } else {
+                // Use markdown rendering for AI messages
+                const formattedText = markdownToHtml(text);
                 messageDiv.innerHTML = `
                     <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                        <p class="text-gray-800">${escapeHtml(text)}</p>
+                        <div class="text-gray-800 prose prose-sm max-w-none">${formattedText}</div>
                     </div>
                 `;
             }
@@ -654,6 +1355,61 @@
                 messagesContainer.appendChild(messageDiv);
             }
             
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Function to generate initial message for a branch (pre-populated for demo)
+        function generateBranchInitialMessage(branchName, branchColor, branchData) {
+            // Pre-written messages for smooth demo experience
+            let branchMessage = '';
+            let aiResponse = '';
+            
+            if (branchName === 'Carlos R.') {
+                branchMessage = "I'm particularly interested in how we can measure the structural dimension you mentioned. Could you elaborate on how to assess how well connections are made between concepts? Also, have you seen any studies that combine rubric-based and behavioral metrics effectively?";
+                aiResponse = "Great question. For the structural dimension, you can use concept mapping tasks where participants create visual representations of relationships between ideas. Score based on: (1) number of connections, (2) hierarchical organization, (3) cross-linking between distant concepts. \n\nFor combining metrics, see **Kintsch & van Dijk (1978)** on text comprehension and **Chi et al. (1989)** on self-explanations. They used both process (think-aloud protocols) and product (concept maps) measures. More recently, **Koedinger et al. (2013)** combined clickstream data with learning outcomes in MOOCs—similar approach you could adapt.";
+            } else if (branchName === 'Ted S.') {
+                branchMessage = "The behavioral metrics approach sounds promising. I'm curious about the switching behavior metric specifically - how would you operationalize that in a study? Also, what's the typical time range you'd expect to see meaningful differences between conditions?";
+                aiResponse = "For switching behavior, you can track: (1) **tab switches** between article and notes/document, (2) **scroll events** indicating re-reading, (3) **time spent** in each view before switching. Use event logging (e.g., browser extension or screen recording with timestamp analysis). \n\nTime ranges depend on task complexity, but for literature review: \n- **Short tasks** (15-30 min): differences may appear in first 5-10 minutes \n- **Medium tasks** (1-2 hours): meaningful differences typically emerge after 20-30 minutes \n- **Long tasks** (2+ hours): patterns stabilize around 45-60 minutes\n\nReference: **Pirolli & Card (1999)** on information foraging found switching patterns differentiate expert vs. novice behavior within first 20 minutes of task.";
+            } else {
+                // Generic message for other branches
+                branchMessage = "I'd like to explore this further. Can you provide more details?";
+                aiResponse = "I'd be happy to help you explore this topic further. What specific aspect would you like to dive deeper into?";
+            }
+            
+            // Add the branch person's message to the conversation (this is a branch message)
+            addMessageToChat(branchMessage, true, true);
+            
+            // Add to conversation history
+            conversationHistory.push({
+                role: 'user',
+                content: branchMessage
+            });
+            
+            // Add AI response immediately (no API call)
+            addMessageToChat(aiResponse, false);
+            
+            // Add assistant message to conversation history
+            conversationHistory.push({
+                role: 'assistant',
+                content: aiResponse
+            });
+            
+            // Update branch data directly
+            branchData.messages.push({
+                role: 'user',
+                content: branchMessage
+            });
+            branchData.messages.push({
+                role: 'assistant',
+                content: aiResponse
+            });
+            branchData.conversationHistory = JSON.parse(JSON.stringify(conversationHistory));
+            branchData.initialized = true;
+            
+            // Save the chat - this will now correctly save only to this branch
+            saveCurrentChat();
+            
+            // Scroll to bottom
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
@@ -696,6 +1452,18 @@
             return div.innerHTML;
         }
         
+        // Function to update active state of branch person buttons
+        function updateBranchPersonActiveState(activeBranchName) {
+            document.querySelectorAll('.branch-person').forEach(person => {
+                const personName = person.dataset.name;
+                if (personName === activeBranchName) {
+                    person.classList.add('active');
+                } else {
+                    person.classList.remove('active');
+                }
+            });
+        }
+        
         // Branch button functionality
         branchButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -726,19 +1494,162 @@
             person.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const name = person.dataset.name;
+                const color = person.dataset.color;
                 
                 // Close branch dropdown
                 branchDropdown.classList.remove('show');
                 
-                // Remove all selection classes first
-                document.body.classList.remove('carlos-selected', 'ted-selected');
+                // Save current chat before switching
+                if (currentChatId) {
+                    saveCurrentChat();
+                }
                 
-                // Add appropriate class based on who was clicked
+                // If clicking on the same branch person, switch back to main view
+                if (currentBranch === name && currentChatId) {
+                    const chat = getChat(currentChatId);
+                    if (chat) {
+                        // Switch back to main conversation
+                        currentBranch = null;
+                        branchPoint = null;
+                        conversationHistory = chat.conversationHistory || [];
+                        
+                        // Clear and reload main conversation messages
+                        const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                        if (messagesContainer) {
+                            messagesContainer.innerHTML = '';
+                        }
+                        
+                        // Load main conversation messages
+                        if (chat.messages && chat.messages.length > 0) {
+                            chat.messages.forEach(msg => {
+                                addMessageToChat(msg.content, msg.role === 'user', false);
+                            });
+                        }
+                        
+                        // Save chat with updated branch info
+                        chat.currentBranch = null;
+                        chat.branchPoint = null;
+                        saveChat(currentChatId, chat);
+                        
+                        // Update UI - remove branch styling
+                        document.body.classList.remove('carlos-selected', 'ted-selected');
+                        
+                        // Update branch person active state (none active)
+                        updateBranchPersonActiveState(null);
+                        
+                        // Scroll to bottom
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+                    return;
+                }
+                
+                // If no current chat, create one first
+                if (!currentChatId) {
+                    currentChatId = 'chat-' + Date.now();
+                    const newChat = {
+                        title: 'New Chat',
+                        messages: [],
+                        conversationHistory: [],
+                        branches: {},
+                        currentBranch: null,
+                        branchPoint: null
+                    };
+                    saveChat(currentChatId, newChat);
+                }
+                
+                const chat = getChat(currentChatId);
+                if (!chat) return;
+                
+                // Initialize branches if needed
+                if (!chat.branches) {
+                    chat.branches = {};
+                }
+                
+                // Get current message count before branching (this is the branch point)
+                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                const currentMessageCount = messagesContainer ? messagesContainer.querySelectorAll('.flex').length : 0;
+                
+                // Create or switch to branch
+                if (!chat.branches[name]) {
+                    // Create new branch - copy conversation up to this point
+                    // Make a deep copy of the conversation history to ensure independence
+                    const branchHistory = JSON.parse(JSON.stringify(conversationHistory));
+                    const branchMessages = [];
+                    
+                    // Get messages from DOM up to this point
+                    if (messagesContainer) {
+                        const messageDivs = messagesContainer.querySelectorAll('.flex');
+                        messageDivs.forEach(div => {
+                            const messageText = div.querySelector('p');
+                            if (messageText) {
+                                const isUser = div.classList.contains('justify-end');
+                                branchMessages.push({
+                                    role: isUser ? 'user' : 'assistant',
+                                    content: messageText.textContent
+                                });
+                            }
+                        });
+                    }
+                    
+                    // Create initial branch structure
+                    chat.branches[name] = {
+                        name: name,
+                        color: color,
+                        conversationHistory: branchHistory,
+                        messages: JSON.parse(JSON.stringify(branchMessages)), // Deep copy
+                        branchPoint: currentMessageCount,
+                        initialized: false // Track if branch has been initialized with unique content
+                    };
+                    
+                    // Save the branch structure first
+                    saveChat(currentChatId, chat);
+                }
+                
+                // Switch to this branch
+                currentBranch = name;
+                branchPoint = chat.branches[name].branchPoint;
+                // Create a new array reference so modifications don't affect the stored version
+                conversationHistory = JSON.parse(JSON.stringify(chat.branches[name].conversationHistory));
+                
+                // Clear and reload messages for this branch
+                if (messagesContainer) {
+                    messagesContainer.innerHTML = '';
+                }
+                
+                // Load branch messages
+                if (chat.branches[name].messages && chat.branches[name].messages.length > 0) {
+                    const branchPointIndex = chat.branches[name].branchPoint || 0;
+                    chat.branches[name].messages.forEach((msg, index) => {
+                        // Only mark messages after the branch point as branch messages
+                        const isBranchMsg = index >= branchPointIndex;
+                        addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                    });
+                }
+                
+                // If branch hasn't been initialized, generate unique content for this person
+                if (!chat.branches[name].initialized) {
+                    // Generate a unique message from this person's perspective
+                    generateBranchInitialMessage(name, color, chat.branches[name]);
+                }
+                
+                // Save chat with branch info
+                chat.currentBranch = currentBranch;
+                chat.branchPoint = branchPoint;
+                saveChat(currentChatId, chat);
+                
+                // Update UI
+                document.body.classList.remove('carlos-selected', 'ted-selected');
                 if (name === 'Carlos R.') {
                     document.body.classList.add('carlos-selected');
                 } else if (name === 'Ted S.') {
                     document.body.classList.add('ted-selected');
                 }
+                
+                // Update branch person active state
+                updateBranchPersonActiveState(name);
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             });
         });
         
@@ -855,11 +1766,29 @@
             
             if (!message) return;
             
+            // Create a new chat if we don't have one
+            if (!currentChatId) {
+                currentChatId = 'chat-' + Date.now();
+                const newChat = {
+                    title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+                    messages: [],
+                    conversationHistory: [],
+                    branches: {},
+                    currentBranch: null,
+                    branchPoint: null
+                };
+                saveChat(currentChatId, newChat);
+                renderChatHistory();
+            }
+            
             // Disable input while processing
             messageInput.disabled = true;
             
-            // Add user message to chat
-            addMessageToChat(message, true);
+            // Add user message to chat - check if we're in a branch and if this is after branch point
+            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const currentMessageCount = messagesContainer ? messagesContainer.querySelectorAll('.flex').length : 0;
+            const isBranchMsg = currentBranch && branchPoint !== null && currentMessageCount >= branchPoint;
+            addMessageToChat(message, true, isBranchMsg);
             
             // Add user message to conversation history
             conversationHistory.push({
@@ -874,6 +1803,11 @@
             addLoadingIndicator();
             
             try {
+                // Prepare conversation history for API
+                // Send the conversation history up to (but not including) the current user message
+                // This ensures each branch gets different responses based on their unique history
+                const historyForAPI = conversationHistory.slice(0, -1);
+                
                 // Call API endpoint
                 const response = await fetch('/api/chat', {
                     method: 'POST',
@@ -882,7 +1816,7 @@
                     },
                     body: JSON.stringify({
                         message: message,
-                        conversationHistory: conversationHistory.slice(0, -1) // Send all but the current message
+                        conversationHistory: historyForAPI
                     })
                 });
                 
@@ -904,6 +1838,12 @@
                 
                 // Add AI response to chat
                 addMessageToChat(data.message, false);
+                
+                // Save the chat after adding messages
+                saveCurrentChat();
+                
+                // Update chat history list
+                renderChatHistory();
                 
             } catch (error) {
                 // Remove loading indicator

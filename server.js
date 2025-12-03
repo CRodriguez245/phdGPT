@@ -1,5 +1,18 @@
-// Vercel serverless function for chat API
-module.exports = async (req, res) => {
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(__dirname));
+
+// API route for chat (works for both Express and Vercel serverless)
+app.post('/api/chat', async (req, res) => {
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -16,7 +29,7 @@ module.exports = async (req, res) => {
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured. Please set OPENAI_API_KEY in your environment variables.' });
+      return res.status(500).json({ error: 'API key not configured. Please set OPENAI_API_KEY in your .env file.' });
     }
 
     // Build conversation messages for ChatGPT API
@@ -78,4 +91,21 @@ module.exports = async (req, res) => {
       details: error.message 
     });
   }
-};
+});
+
+// Serve index.html for root route
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Start server (only if not in Vercel serverless environment)
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log('Make sure you have set OPENAI_API_KEY in your .env file');
+  });
+}
+
+// Export for Vercel serverless
+module.exports = app;
+
