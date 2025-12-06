@@ -6,19 +6,76 @@
     <title>phdGPT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Font family */
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        }
         /* Custom scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
             background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
+            background: #d1d5db;
+            border-radius: 3px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #555;
+            background: #9ca3af;
+        }
+        /* Active chat history item */
+        .chat-history-item.active {
+            background-color: #374151;
+            color: white;
+        }
+        .chat-history-item.active:hover {
+            background-color: #4b5563;
+            color: white;
+        }
+        /* Active branch item */
+        .branch-item.active {
+            background-color: #374151;
+            color: white;
+        }
+        .branch-item.active:hover {
+            background-color: #4b5563;
+            color: white;
+        }
+        /* List indentation in message bubbles */
+        .ai-message-bubble ul,
+        .ai-message-bubble ol {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding-left: 1rem;
+        }
+        .ai-message-bubble li {
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+            padding-left: 0.25rem;
+        }
+        .ai-message-bubble ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .ai-message-bubble ol {
+            list-style-type: decimal;
+            list-style-position: outside;
+        }
+        .ai-message-bubble ul li {
+            position: relative;
+            padding-left: 1.5em;
+        }
+        .ai-message-bubble ul li::before {
+            content: "•";
+            color: #1f2937;
+            position: absolute;
+            left: 0;
+        }
+        /* Handle bullet points in plain text (•) */
+        .ai-message-bubble p:has-text("•") {
+            padding-left: 1.5rem;
         }
         /* Ensure icon background matches button */
         .branch-icon-wrapper {
@@ -37,7 +94,7 @@
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            min-width: 280px;
+            min-width: 220px;
             z-index: 50;
         }
         .share-dropdown.show {
@@ -48,12 +105,12 @@
             display: none;
             position: absolute;
             top: calc(100% + 8px);
-            right: 0;
+            left: 0;
             background: white;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            min-width: 280px;
+            min-width: 220px;
             z-index: 50;
         }
         .branch-dropdown.show {
@@ -66,18 +123,42 @@
         body.share-mode #chatMessages {
             transform: scale(0.75);
             transform-origin: top center;
+            overflow: visible;
+        }
+        body.share-mode #chatMessages > div {
+            min-height: 133.33%;
         }
         /* Change user message bubbles to blue when Carlos is selected - only for messages after branch point */
-        body.carlos-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-100 {
+        body.carlos-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-50 {
             background-color: #90DFFB !important;
         }
         /* Change user message bubbles to green when Ted is selected - only for messages after branch point */
-        body.ted-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-100 {
+        body.ted-selected #chatMessages .flex.justify-end.branch-message:not(.carlos-message) > div.bg-blue-50 {
             background-color: #90FBCD !important;
+        }
+        /* Change user message bubbles to emerald when Paige is selected - only for messages after branch point */
+        body.paige-selected #chatMessages .flex.justify-end.branch-message > div.bg-blue-50 {
+            background-color: #10b981 !important;
+        }
+        /* In Carlos's branch of Sylvia's chat, style Paige's messages (indices 2-3) with emerald */
+        /* We'll use a different approach - mark Paige's messages with a class */
+        body.sylvia-chat.carlos-selected #chatMessages .flex.justify-end.branch-message.paige-message > div.bg-blue-50 {
+            background-color: #10b981 !important;
+        }
+        /* In Ted's branch of Sylvia's chat, style Carlos's message with blue (#90DFFB) - MUST come before orange rule to override */
+        body.sylvia-chat.ted-selected #chatMessages .flex.justify-end.branch-message.carlos-message > div.bg-blue-50 {
+            background-color: #90DFFB !important;
+        }
+        body.sylvia-chat #chatMessages .flex.justify-end.branch-message.carlos-message > div.bg-blue-50 {
+            background-color: #90DFFB !important;
+        }
+        /* Change user message bubbles to orange for Sylvia's shared conversation (only non-branch messages) */
+        body.sylvia-chat #chatMessages .flex.justify-end:not(.branch-message):not(.carlos-message) > div.bg-blue-50 {
+            background-color: #fb923c !important;
         }
         /* Active branch person styling */
         .branch-person.active {
-            background-color: #f3f4f6;
+            background-color: #e5e7eb;
         }
         .branch-person.active > div > div[style*="background-color"] {
             opacity: 0.5;
@@ -157,37 +238,88 @@
             opacity: 0.9;
             transform: scale(1.01);
         }
-        /* Selected message styling */
+        /* Selected message styling - unified gray background */
         .message-selectable.selected {
             position: relative;
         }
+        .message-selectable.selected::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            right: -6px;
+            background-color: #e5e7eb;
+            z-index: 0;
+        }
+        /* First selected message - rounded top, extends down to next selected */
+        .message-selectable.selected:first-of-type::before {
+            top: -6px;
+            bottom: -6px;
+            border-radius: 8px 8px 0 0;
+        }
+        /* Middle selected messages - extends up and down to connect */
+        .message-selectable.selected:not(:first-of-type):not(:last-of-type)::before {
+            top: -6px;
+            bottom: -6px;
+        }
+        /* Last selected message - rounded bottom, only extends up */
+        .message-selectable.selected:last-of-type::before {
+            top: -6px;
+            bottom: -6px;
+            border-radius: 0 0 8px 8px;
+        }
+        /* Single selected message - all rounded */
+        .message-selectable.selected:only-of-type::before {
+            border-radius: 8px !important;
+        }
+        /* Extend to connect consecutive selected messages */
+        .message-selectable.selected:not(:last-of-type) + .message-selectable.selected::before {
+            top: calc(-1.5rem - 6px);
+        }
+        .message-selectable.selected:not(:last-of-type)::before {
+            bottom: calc(-1.5rem - 6px);
+        }
         .message-selectable.selected > div {
-            box-shadow: 0 0 0 3px #3b82f6 !important;
-            border-radius: 12px !important;
+            position: relative;
+            z-index: 1;
+        }
+        /* Branch note styling */
+        .branch-note {
+            position: absolute;
+            left: -200px;
+            top: 0;
+            width: 170px;
+            padding: 10px 12px;
+            background-color: #f3f4f6;
+            border-left: 3px solid #29FFA2; /* Default to Ted's green */
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #374151;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            margin-left: 16px;
+        }
+        /* Branch note colors by contributor */
+        .branch-note.ted-note {
+            border-left-color: #29FFA2;
+        }
+        .branch-note.paige-note {
+            border-left-color: #10b981;
+        }
+        .branch-note.carlos-note {
+            border-left-color: #90DFFB;
+        }
+        .branch-note.sylvia-note {
+            border-left-color: #fb923c;
+        }
+        .branch-note strong {
+            color: #111827;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 4px;
         }
         .message-selectable.selected::after {
-            content: '✓';
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #3b82f6;
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            font-weight: bold;
-            z-index: 1000;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
-            pointer-events: none;
-        }
-        /* Position checkmark for right-aligned messages */
-        .flex.justify-end.message-selectable.selected::after {
-            right: auto;
-            left: -8px;
+            display: none;
         }
         .share-tooltip-content input[type="radio"]:disabled + span {
             color: #9ca3af;
@@ -352,45 +484,110 @@
         /* Search bar */
         .search-bar {
             display: none;
-            padding: 12px 16px;
-            border-bottom: 1px solid #374151;
         }
         .search-bar.show {
             display: block;
         }
-        .search-bar input {
-            width: 100%;
-            padding: 8px 12px;
-            background-color: #4b5563;
-            border: 1px solid #6b7280;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-bar input:focus {
-            border-color: #3b82f6;
-            background-color: #4b5563;
-        }
-        .search-bar input::placeholder {
-            color: #9ca3af;
-        }
     </style>
 </head>
 <body class="bg-white h-screen overflow-hidden">
-    <div class="flex flex-col h-screen">
-        <!-- Top Bar -->
-        <div class="flex border-b border-gray-700">
-            <!-- Logo and Name -->
-            <div class="w-64 bg-gray-800 text-white border-r border-gray-700">
-                <div class="p-4">
-                    <h1 class="text-2xl font-bold">phdGPT</h1>
+    <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <aside class="w-64 bg-white border-r border-gray-200 flex flex-col h-full pt-6">
+            <!-- Title -->
+            <div class="px-4 py-4">
+                <h1 class="text-2xl font-medium text-gray-900 pl-3">phdGPT</h1>
+            </div>
+            <!-- Navigation -->
+            <nav class="p-4 space-y-1">
+                <button id="newChatButton" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-left text-gray-700">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span class="text-sm font-medium">New chat</span>
+                </button>
+                <button id="searchChatButton" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-left text-gray-700">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span class="text-sm font-medium">Search chat</span>
+                </button>
+                <button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-left text-gray-700">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    <span class="text-sm font-medium">Library</span>
+                </button>
+            </nav>
+            
+            <!-- Search Bar -->
+            <div id="searchBar" class="search-bar px-4">
+                <input 
+                    type="text" 
+                    id="searchInput"
+                    placeholder="Search chats..." 
+                    autocomplete="off"
+                    class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-700"
+                />
+            </div>
+            
+            <!-- Branches Section -->
+            <div class="px-4 pb-4 pt-4">
+                <h2 class="text-xs font-semibold text-gray-400 mb-2 tracking-wider px-3">Branches</h2>
+                <div id="branchesList" class="space-y-0.5">
+                    <button class="branch-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="current-chat">
+                        Literature Review Study
+                    </button>
+                    <button class="branch-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="sylvia-research-questions">
+                        Planning a Study on Student Study Habits
+                    </button>
                 </div>
             </div>
-            <!-- Header Buttons -->
-            <header class="flex-1 bg-white flex justify-end items-center">
-                <div class="px-6 py-4 flex items-center gap-3">
+            
+            <!-- Chat History -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 pt-4">
+                <h2 class="text-xs font-semibold text-gray-400 mb-2 tracking-wider px-3">Chats</h2>
+                <div id="chatHistoryList" class="space-y-0.5">
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="typo-assistance-1">
+                        Typo Assistance Request
+                    </button>
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="generate-images-sora">
+                        Generate images on Sora
+                    </button>
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="urban-green-spaces">
+                        Urban Green Spaces
+                    </button>
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="typo-assistance-2">
+                        Typo Assistance Request
+                    </button>
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="workshop-agenda">
+                        Workshop agenda creation
+                    </button>
+                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate" data-chat-id="section-1-structure">
+                        Section 1 structure
+                    </button>
+                </div>
+            </div>
+            
+            <!-- User Profile -->
+            <div class="border-t border-gray-200 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-gray-800 font-semibold text-sm">
+                        S
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate">Shruthi Iyer</p>
+                        <p class="text-xs text-gray-500 truncate">Student Account</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+            <!-- Header -->
+            <header class="flex items-center justify-end px-6 py-4">
+                <div class="flex items-center gap-3">
                     <div class="relative">
                         <button id="branchButton" class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full transition-colors text-gray-700 text-sm font-medium border border-gray-300">
                             <div class="branch-icon-wrapper w-4 h-4 bg-white flex items-center justify-center">
@@ -413,6 +610,18 @@
                                                 C
                                             </div>
                                             <span class="text-gray-700 text-sm">Carlos R.</span>
+                                        </div>
+                                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </div>
+                                    <div class="branch-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer justify-between" data-name="Paige T." data-initial="P" data-color="#10b981">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #10b981;">
+                                                P
+                                            </div>
+                                            <span class="text-gray-700 text-sm">Paige T.</span>
                                         </div>
                                         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -470,14 +679,14 @@
                                         </div>
                                         <span class="text-gray-700 text-sm">Ted S.</span>
                                     </div>
-                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Paige T." data-initial="P" data-color="bg-emerald-500">
-                                        <div class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Paige T." data-initial="P" data-color="#10b981">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #10b981;">
                                             P
                                         </div>
                                         <span class="text-gray-700 text-sm">Paige T.</span>
                                     </div>
-                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Sylvia K." data-initial="S" data-color="bg-orange-500">
-                                        <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                    <div class="share-person flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer" data-name="Sylvia K." data-initial="S" data-color="#f97316">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background-color: #f97316;">
                                             S
                                         </div>
                                         <span class="text-gray-700 text-sm">Sylvia K.</span>
@@ -555,97 +764,14 @@
                     </button>
                 </div>
             </header>
-        </div>
-        
-        <!-- Main Content Area -->
-        <div class="flex flex-1 overflow-hidden">
-        <!-- Left Sidebar -->
-        <aside class="w-64 bg-gray-800 text-white flex flex-col h-full">
-            <!-- Navigation -->
-            <nav class="flex-1">
-                <div class="p-4 space-y-2">
-                    <button id="newChatButton" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        <span>New chat</span>
-                    </button>
-                    <button id="searchChatButton" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        <span>Search chat</span>
-                    </button>
-                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-left">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                        <span>Library</span>
-                    </button>
-                </div>
-            </nav>
-            
-            <!-- Search Bar -->
-            <div id="searchBar" class="search-bar">
-                <input 
-                    type="text" 
-                    id="searchInput"
-                    placeholder="Search chats..." 
-                    autocomplete="off"
-                />
-            </div>
-            
-            <!-- Chat History -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-4">
-                <h2 class="text-sm font-semibold text-gray-400 mb-3 uppercase">Chats</h2>
-                <div id="chatHistoryList" class="space-y-1">
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="typo-assistance-1">
-                        Typo Assistance Request
-                    </button>
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="generate-images-sora">
-                        Generate images on Sora
-                    </button>
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="urban-green-spaces">
-                        Urban Green Spaces
-                    </button>
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="typo-assistance-2">
-                        Typo Assistance Request
-                    </button>
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="workshop-agenda">
-                        Workshop agenda creation
-                    </button>
-                    <button class="chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate" data-chat-id="section-1-structure">
-                        Section 1 structure
-                    </button>
-                </div>
-            </div>
-            
-            <!-- User Profile -->
-            <div class="border-t border-gray-700">
-                <div class="p-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                            S
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium truncate">Shruthi Iyer</p>
-                            <p class="text-xs text-gray-400 truncate">Student Account</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-        
-        <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col bg-white h-full overflow-hidden">
             
             <!-- Chat Messages Area -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar py-8" id="chatMessages">
-                <div class="max-w-2xl mx-auto px-6">
+            <div class="flex-1 overflow-y-auto custom-scrollbar py-6" id="chatMessages">
+                <div class="max-w-4xl mx-auto px-8">
                     <!-- User Message -->
                     <div class="flex justify-end mb-6 message-selectable">
-                        <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
-                            <p class="text-gray-800">
+                        <div class="max-w-[75%] bg-blue-50 rounded-[5px] px-5 py-4 shadow-md">
+                            <p class="text-gray-800 leading-relaxed">
                                 Hey, I'm designing a study to evaluate how novice researchers use AI tools during literature review. I want to compare three workflows: baseline, AI-summaries, and AI-guided questioning. I'm stuck on how to operationalize "depth of understanding." Any suggestions?
                             </p>
                         </div>
@@ -653,17 +779,15 @@
                     
                     <!-- AI Message -->
                     <div class="flex justify-start mb-6 message-selectable">
-                        <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                            <p class="text-gray-800">
-                                Sure — "depth of understanding" in HCI literature is often operationalized across three dimensions: 1. Breadth (coverage of core ideas, concepts identified) 2. Accuracy (correctness vs hallucination/overgeneralization) 3. Structure (how well connections are made between concepts) You can turn those into a rubric: • 0-2 points per dimension • Evaluate written summaries, outlines, or concept maps • Inter-rater reliability check using Cohen's k Would you like me to draft the rubric?
-                            </p>
+                        <div class="ai-message-bubble max-w-[75%] bg-white rounded-[5px] px-5 py-4 shadow-md">
+                            <div class="text-gray-800 leading-relaxed prose prose-sm max-w-none" id="initialMessage1"></div>
                         </div>
                     </div>
                     
                     <!-- User Message -->
                     <div class="flex justify-end mb-6 message-selectable">
-                        <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
-                            <p class="text-gray-800">
+                        <div class="max-w-[75%] bg-blue-50 rounded-[5px] px-5 py-4 shadow-md">
+                            <p class="text-gray-800 leading-relaxed">
                                 Yes — but I'm worried reviewers will say rubric scoring is subjective. Should I include behavioral metrics?
                             </p>
                         </div>
@@ -671,31 +795,31 @@
                     
                     <!-- AI Message -->
                     <div class="flex justify-start mb-6 message-selectable">
-                        <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                            <p class="text-gray-800">
-                                Great instinct. Add process-level indicators, which pair nicely with rubric scoring: • Time • Number of sources consulted • Switching behavior (e.g., toggling between article and notes) • Latency before taking first note
-                            </p>
+                        <div class="ai-message-bubble max-w-[75%] bg-white rounded-[5px] px-5 py-4 shadow-md">
+                            <div class="text-gray-800 leading-relaxed prose prose-sm max-w-none" id="initialMessage2"></div>
                         </div>
                     </div>
                 </div>
             </div>
             
             <!-- Input Area -->
-            <div class="border-t border-gray-200 py-4">
-                <div class="max-w-2xl mx-auto px-6">
+            <div>
+                <div class="max-w-2xl mx-auto px-6 py-4">
                     <form id="chatForm" class="relative">
-                        <input 
-                            type="text" 
+                        <textarea 
                             id="messageInput"
                             placeholder="Ask anything" 
-                            class="w-full bg-blue-600 text-white rounded-full px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-blue-200 border border-blue-400"
-                        />
+                            rows="1"
+                            class="w-full bg-blue-500 text-white rounded-full px-5 py-3.5 pr-14 focus:outline-none placeholder-blue-200 text-sm font-medium shadow-md resize-none overflow-hidden leading-tight"
+                            style="min-height: 48px; max-height: 200px; line-height: 1.5;"
+                        ></textarea>
                         <button 
                             type="submit"
-                            class="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-blue-100 transition-colors p-1"
+                            class="absolute right-4 flex items-center justify-center text-white hover:text-blue-50 transition-colors p-1.5 pointer-events-auto"
+                            style="top: 50%; transform: translateY(-50%);"
                         >
-                            <svg class="w-5 h-5 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            <svg class="w-5 h-5 rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                             </svg>
                         </button>
                     </form>
@@ -715,6 +839,30 @@
     <script>
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
+        
+        // Auto-resize textarea and center button
+        const sendButton = chatForm.querySelector('button[type="submit"]');
+        function autoResizeTextarea() {
+            messageInput.style.height = 'auto';
+            const newHeight = Math.min(messageInput.scrollHeight, 200);
+            messageInput.style.height = newHeight + 'px';
+            // Update button position to stay centered
+            sendButton.style.top = (newHeight / 2) + 'px';
+            sendButton.style.transform = 'translateY(-50%)';
+        }
+        
+        messageInput.addEventListener('input', autoResizeTextarea);
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            } else {
+                setTimeout(autoResizeTextarea, 0);
+            }
+        });
+        
+        // Initialize button position
+        setTimeout(autoResizeTextarea, 0);
         const chatMessages = document.getElementById('chatMessages');
         const branchButton = document.getElementById('branchButton');
         const branchDropdown = document.getElementById('branchDropdown');
@@ -840,12 +988,87 @@
                         { role: 'user', content: 'How should I structure the first section of my paper?' },
                         { role: 'assistant', content: 'The first section typically serves as an introduction. It should include: 1) Context and background, 2) Problem statement, 3) Research objectives/questions, 4) Paper structure overview. Would you like help with any specific part?' }
                     ]
+                },
+                'sylvia-research-questions': {
+                    title: 'Planning a Study on Student Study Habits',
+                    messages: [
+                        { role: 'user', content: 'Hi! I\'m planning a study about how college students study for exams. I want to understand what study methods work best, but I\'m not sure how to design the study. Can you help me think through this?' },
+                        { role: 'assistant', content: 'That\'s a great research topic! To design a good study on student study habits, here are some things to consider:\n\n1. **What do you want to learn?** Are you interested in which study methods students use most? Or which methods help them get better grades?\n2. **Who are you studying?** First-year students? Upperclassmen? Students in specific majors?\n3. **How will you measure success?** Exam scores? Student self-reports? Both?\n4. **What study methods are you comparing?** Flashcards, group study, practice tests, reading notes, etc.?\n\nOnce you decide on these, we can figure out the best way to design your study. What aspect interests you most?' }
+                    ],
+                    conversationHistory: [
+                        { role: 'user', content: 'Hi! I\'m planning a study about how college students study for exams. I want to understand what study methods work best, but I\'m not sure how to design the study. Can you help me think through this?' },
+                        { role: 'assistant', content: 'That\'s a great research topic! To design a good study on student study habits, here are some things to consider:\n\n1. **What do you want to learn?** Are you interested in which study methods students use most? Or which methods help them get better grades?\n2. **Who are you studying?** First-year students? Upperclassmen? Students in specific majors?\n3. **How will you measure success?** Exam scores? Student self-reports? Both?\n4. **What study methods are you comparing?** Flashcards, group study, practice tests, reading notes, etc.?\n\nOnce you decide on these, we can figure out the best way to design your study. What aspect interests you most?' }
+                    ],
+                    branches: {
+                        'Paige T.': {
+                            name: 'Paige T.',
+                            color: '#10b981',
+                            conversationHistory: [
+                                { role: 'user', content: 'Hi! I\'m planning a study about how college students study for exams. I want to understand what study methods work best, but I\'m not sure how to design the study. Can you help me think through this?' },
+                                { role: 'assistant', content: 'That\'s a great research topic! To design a good study on student study habits, here are some things to consider:\n\n1. **What do you want to learn?** Are you interested in which study methods students use most? Or which methods help them get better grades?\n2. **Who are you studying?** First-year students? Upperclassmen? Students in specific majors?\n3. **How will you measure success?** Exam scores? Student self-reports? Both?\n4. **What study methods are you comparing?** Flashcards, group study, practice tests, reading notes, etc.?\n\nOnce you decide on these, we can figure out the best way to design your study. What aspect interests you most?' }
+                            ],
+                            messages: [
+                                { role: 'user', content: 'Hi! I\'m planning a study about how college students study for exams. I want to understand what study methods work best, but I\'m not sure how to design the study. Can you help me think through this?' },
+                                { role: 'assistant', content: 'That\'s a great research topic! To design a good study on student study habits, here are some things to consider:\n\n1. **What do you want to learn?** Are you interested in which study methods students use most? Or which methods help them get better grades?\n2. **Who are you studying?** First-year students? Upperclassmen? Students in specific majors?\n3. **How will you measure success?** Exam scores? Student self-reports? Both?\n4. **What study methods are you comparing?** Flashcards, group study, practice tests, reading notes, etc.?\n\nOnce you decide on these, we can figure out the best way to design your study. What aspect interests you most?' },
+                                { role: 'user', content: 'I\'m really interested in understanding the student experience - like how they feel about different study methods and why they choose what they do. What kind of study would help me learn about that?' },
+                                { role: 'assistant', content: 'That sounds like a perfect fit for a qualitative study! You could:\n\n**Interview students** to hear their stories about studying:\n- "What does your study process look like when preparing for exams?"\n- "How do you decide which study method to use for different classes?"\n- "What makes a study session feel successful to you?"\n\n**Observe students studying** to see what they actually do:\n- Watch how they organize their notes\n- See when they take breaks\n- Notice what helps them focus\n\n**Ask students to keep journals** about their study habits for a few weeks\n\nThese approaches help you understand the "why" and "how" behind study habits, not just the numbers. Would you like help planning interviews or observations?' }
+                            ],
+                            branchPoint: 2,
+                            initialized: true
+                        },
+                        'Carlos R.': {
+                            name: 'Carlos R.',
+                            color: '#90DFFB',
+                            conversationHistory: [
+                                { role: 'user', content: 'Hi! I\'m working on formulating my research questions for my dissertation on educational technology. I want to study how students use AI tools for writing, but I\'m struggling to narrow down my research questions. Any advice?' },
+                                { role: 'assistant', content: 'Great topic! For formulating research questions about AI tools in student writing, consider these dimensions:\n\n1. **Scope**: Are you focusing on a specific educational level (K-12, undergraduate, graduate)?\n2. **Outcomes**: What are you measuring? Writing quality, learning outcomes, tool adoption, or something else?\n3. **Context**: Classroom use, homework, or both?\n4. **Comparison**: Are you comparing AI-assisted vs. traditional writing, or different AI tools?\n\nA well-formed research question should be: specific, measurable, achievable, relevant, and time-bound. Would you like to explore any of these dimensions further?' },
+                                { role: 'user', content: 'I\'m particularly interested in the qualitative side - understanding students\' experiences and perceptions. How would you frame research questions for a qualitative study on this topic?' },
+                                { role: 'assistant', content: 'Excellent! For qualitative research questions, you\'ll want to focus on **experiences, meanings, and processes** rather than causal relationships. Here are some approaches:\n\n**Phenomenological questions**:\n- "What are undergraduate students\' lived experiences when using AI writing tools for academic assignments?"\n- "How do students make sense of AI assistance in their writing process?"\n\n**Case study questions**:\n- "How do students in a specific writing course navigate the use of AI tools throughout a semester?"\n- "What strategies do students develop when integrating AI feedback into their writing?"\n\n**Grounded theory questions**:\n- "What processes do students engage in when deciding whether to use AI tools for different writing tasks?"\n- "How do students negotiate the boundary between AI assistance and their own writing voice?"\n\nQualitative questions often start with "How," "What," or "In what ways" and emphasize depth over breadth. Would you like to refine any of these?' }
+                            ],
+                            messages: [
+                                { role: 'user', content: 'Hi! I\'m working on formulating my research questions for my dissertation on educational technology. I want to study how students use AI tools for writing, but I\'m struggling to narrow down my research questions. Any advice?' },
+                                { role: 'assistant', content: 'Great topic! For formulating research questions about AI tools in student writing, consider these dimensions:\n\n1. **Scope**: Are you focusing on a specific educational level (K-12, undergraduate, graduate)?\n2. **Outcomes**: What are you measuring? Writing quality, learning outcomes, tool adoption, or something else?\n3. **Context**: Classroom use, homework, or both?\n4. **Comparison**: Are you comparing AI-assisted vs. traditional writing, or different AI tools?\n\nA well-formed research question should be: specific, measurable, achievable, relevant, and time-bound. Would you like to explore any of these dimensions further?' },
+                                { role: 'user', content: 'I\'m particularly interested in the qualitative side - understanding students\' experiences and perceptions. How would you frame research questions for a qualitative study on this topic?' },
+                                { role: 'assistant', content: 'Excellent! For qualitative research questions, you\'ll want to focus on **experiences, meanings, and processes** rather than causal relationships. Here are some approaches:\n\n**Phenomenological questions**:\n- "What are undergraduate students\' lived experiences when using AI writing tools for academic assignments?"\n- "How do students make sense of AI assistance in their writing process?"\n\n**Case study questions**:\n- "How do students in a specific writing course navigate the use of AI tools throughout a semester?"\n- "What strategies do students develop when integrating AI feedback into their writing?"\n\n**Grounded theory questions**:\n- "What processes do students engage in when deciding whether to use AI tools for different writing tasks?"\n- "How do students negotiate the boundary between AI assistance and their own writing voice?"\n\nQualitative questions often start with "How," "What," or "In what ways" and emphasize depth over breadth. Would you like to refine any of these?' },
+                                { role: 'user', content: 'I\'m leaning toward a quantitative approach. What would good research questions look like for an experimental or quasi-experimental design?' },
+                                { role: 'assistant', content: 'For quantitative research, you\'ll want questions that test **relationships, differences, or effects**. Here are some examples:\n\n**Experimental questions**:\n- "Does using AI writing tools improve undergraduate students\' essay quality compared to traditional writing methods?"\n- "What is the effect of AI feedback on students\' writing revision behaviors?"\n\n**Quasi-experimental questions**:\n- "How do writing outcomes differ between students who receive AI-assisted feedback versus peer feedback?"\n- "What is the relationship between frequency of AI tool use and final writing scores?"\n\n**Correlational questions**:\n- "Is there a relationship between students\' self-efficacy and their adoption of AI writing tools?"\n- "How do students\' writing anxiety levels correlate with their use of AI assistance?"\n\nQuantitative questions should specify: **variables** (independent/dependent), **population**, and **context**. They often use language like "Does X affect Y?" or "What is the relationship between X and Y?" Would you like help operationalizing any of these?' }
+                            ],
+                            branchPoint: 4,
+                            initialized: true
+                        },
+                        'Ted S.': {
+                            name: 'Ted S.',
+                            color: '#29FFA2',
+                            conversationHistory: [
+                                { role: 'user', content: 'Hi! I\'m working on formulating my research questions for my dissertation on educational technology. I want to study how students use AI tools for writing, but I\'m struggling to narrow down my research questions. Any advice?' },
+                                { role: 'assistant', content: 'Great topic! For formulating research questions about AI tools in student writing, consider these dimensions:\n\n1. **Scope**: Are you focusing on a specific educational level (K-12, undergraduate, graduate)?\n2. **Outcomes**: What are you measuring? Writing quality, learning outcomes, tool adoption, or something else?\n3. **Context**: Classroom use, homework, or both?\n4. **Comparison**: Are you comparing AI-assisted vs. traditional writing, or different AI tools?\n\nA well-formed research question should be: specific, measurable, achievable, relevant, and time-bound. Would you like to explore any of these dimensions further?' },
+                                { role: 'user', content: 'I\'m leaning toward a quantitative approach. What would good research questions look like for an experimental or quasi-experimental design?' },
+                                { role: 'assistant', content: 'For quantitative research, you\'ll want questions that test **relationships, differences, or effects**. Here are some examples:\n\n**Experimental questions**:\n- "Does using AI writing tools improve undergraduate students\' essay quality compared to traditional writing methods?"\n- "What is the effect of AI feedback on students\' writing revision behaviors?"\n\n**Quasi-experimental questions**:\n- "How do writing outcomes differ between students who receive AI-assisted feedback versus peer feedback?"\n- "What is the relationship between frequency of AI tool use and final writing scores?"\n\n**Correlational questions**:\n- "Is there a relationship between students\' self-efficacy and their adoption of AI writing tools?"\n- "How do students\' writing anxiety levels correlate with their use of AI assistance?"\n\nQuantitative questions should specify: **variables** (independent/dependent), **population**, and **context**. They often use language like "Does X affect Y?" or "What is the relationship between X and Y?" Would you like help operationalizing any of these?' }
+                            ],
+                            messages: [
+                                { role: 'user', content: 'Hi! I\'m working on formulating my research questions for my dissertation on educational technology. I want to study how students use AI tools for writing, but I\'m struggling to narrow down my research questions. Any advice?' },
+                                { role: 'assistant', content: 'Great topic! For formulating research questions about AI tools in student writing, consider these dimensions:\n\n1. **Scope**: Are you focusing on a specific educational level (K-12, undergraduate, graduate)?\n2. **Outcomes**: What are you measuring? Writing quality, learning outcomes, tool adoption, or something else?\n3. **Context**: Classroom use, homework, or both?\n4. **Comparison**: Are you comparing AI-assisted vs. traditional writing, or different AI tools?\n\nA well-formed research question should be: specific, measurable, achievable, relevant, and time-bound. Would you like to explore any of these dimensions further?' },
+                                { role: 'user', content: 'I\'m leaning toward a quantitative approach. What would good research questions look like for an experimental or quasi-experimental design?' },
+                                { role: 'assistant', content: 'For quantitative research, you\'ll want questions that test **relationships, differences, or effects**. Here are some examples:\n\n**Experimental questions**:\n- "Does using AI writing tools improve undergraduate students\' essay quality compared to traditional writing methods?"\n- "What is the effect of AI feedback on students\' writing revision behaviors?"\n\n**Quasi-experimental questions**:\n- "How do writing outcomes differ between students who receive AI-assisted feedback versus peer feedback?"\n- "What is the relationship between frequency of AI tool use and final writing scores?"\n\n**Correlational questions**:\n- "Is there a relationship between students\' self-efficacy and their adoption of AI writing tools?"\n- "How do students\' writing anxiety levels correlate with their use of AI assistance?"\n\nQuantitative questions should specify: **variables** (independent/dependent), **population**, and **context**. They often use language like "Does X affect Y?" or "What is the relationship between X and Y?" Would you like help operationalizing any of these?' }
+                            ],
+                            branchPoint: 2,
+                            initialized: true
+                        }
+                    },
+                    currentBranch: null,
+                    branchPoint: null
                 }
             };
             
             // Only initialize if chats don't exist
             if (Object.keys(chats).length === 0) {
                 saveChats(sampleChats);
+            } else {
+                // Always ensure the Sylvia chat exists (for the branch)
+                if (!chats['sylvia-research-questions']) {
+                    chats['sylvia-research-questions'] = sampleChats['sylvia-research-questions'];
+                    saveChats(chats);
+                }
             }
         }
         
@@ -869,10 +1092,16 @@
             }
             
             // Clear current messages
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (messagesContainer) {
                 messagesContainer.innerHTML = '';
             }
+            
+            // Reset all branch note flags when loading a chat
+            tedsBranchNoteAdded = false;
+            paigesBranchNoteAdded = false;
+            carlosBranchNoteAdded = false;
+            sylviasBranchNoteAdded = false;
             
             // Load messages from the appropriate branch
             let messagesToLoad = [];
@@ -887,13 +1116,33 @@
             if (messagesToLoad.length > 0) {
                 messagesToLoad.forEach((msg, index) => {
                     // Messages after the branch point should be marked as branch messages
-                    const isBranchMsg = currentBranch && branchPointIndex !== null && index >= branchPointIndex;
-                    addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                    // In Carlos's branch of Sylvia's chat, also mark Paige's messages (2-3) as branch messages
+                    let isBranchMsg = currentBranch && branchPointIndex !== null && index >= branchPointIndex;
+                    if (currentBranch === 'Carlos R.' && currentChatId === 'sylvia-research-questions' && index >= 2 && index < 4) {
+                        isBranchMsg = true; // Mark Paige's messages as branch messages too
+                    }
+                    const messageDiv = addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                    // In Carlos's branch, mark Paige's messages (indices 2-3) with a special class for styling
+                    if (messageDiv && currentBranch === 'Carlos R.' && currentChatId === 'sylvia-research-questions' && 
+                        index >= 2 && index < 4) {
+                        messageDiv.classList.add('paige-message');
+                    }
+                    // In Ted's branch of Sylvia's chat, mark Carlos's message (index 2) with a special class for blue styling
+                    if (messageDiv && currentBranch === 'Ted S.' && currentChatId === 'sylvia-research-questions' && 
+                        index === 2 && msg.role === 'user' && isBranchMsg) {
+                        messageDiv.classList.add('carlos-message');
+                        // Force the blue color directly via inline style to ensure it overrides
+                        const bubbleDiv = messageDiv.querySelector('div.bg-blue-50');
+                        if (bubbleDiv) {
+                            bubbleDiv.style.backgroundColor = '#90DFFB';
+                        }
+                    }
                 });
             }
             
             // Clear input and focus
             messageInput.value = '';
+            messageInput.style.height = 'auto';
             messageInput.disabled = false;
             messageInput.focus();
             
@@ -910,15 +1159,35 @@
             sentMessageTooltip.classList.remove('show');
             
             // Set UI state based on current branch
-            document.body.classList.remove('share-mode', 'carlos-selected', 'ted-selected');
+            document.body.classList.remove('share-mode', 'carlos-selected', 'ted-selected', 'paige-selected', 'sylvia-chat');
             if (currentBranch === 'Carlos R.') {
                 document.body.classList.add('carlos-selected');
             } else if (currentBranch === 'Ted S.') {
                 document.body.classList.add('ted-selected');
+            } else if (currentBranch === 'Paige T.') {
+                document.body.classList.add('paige-selected');
+            } else if (chatId === 'sylvia-research-questions' && !currentBranch) {
+                // This is Sylvia's shared conversation (main view, not a branch)
+                document.body.classList.add('sylvia-chat');
             }
             
             // Update branch person active state
             updateBranchPersonActiveState(currentBranch);
+            
+            // Update active states for sidebar items
+            document.querySelectorAll('.chat-history-item, .branch-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.chatId === chatId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Add Sylvia's note if viewing main chat (non-branch view) of Sylvia's conversation
+            if (currentChatId === 'sylvia-research-questions' && !currentBranch) {
+                setTimeout(() => {
+                    addSylviasNote();
+                }, 0);
+            }
             
             // Scroll to bottom
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -946,7 +1215,7 @@
                 }
                 
                 // Update messages from DOM
-                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                const messagesContainer = chatMessages.querySelector('.max-w-4xl');
                 if (messagesContainer) {
                     const messageDivs = messagesContainer.querySelectorAll('.flex');
                     const messages = [];
@@ -1028,13 +1297,14 @@
             branchPoint = null;
             
             // Clear all chat messages except the container structure
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (messagesContainer) {
                 messagesContainer.innerHTML = '';
             }
             
             // Clear input field
             messageInput.value = '';
+            messageInput.style.height = 'auto';
             messageInput.disabled = false;
             messageInput.focus();
             
@@ -1134,8 +1404,19 @@
             const chatEntries = Object.entries(chats);
             
             chatEntries.forEach(([chatId, chat]) => {
+                // Exclude 'current-chat' from the Chats section (it belongs in Branches)
+                if (chatId === 'current-chat') {
+                    return;
+                }
+                
+                // Exclude 'research question formula' chat
+                const chatTitle = (chat.title || '').toLowerCase();
+                if (chatTitle.includes('research question formula')) {
+                    return;
+                }
+                
                 const button = document.createElement('button');
-                button.className = 'chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm truncate';
+                button.className = 'chat-history-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm text-gray-900 truncate';
                 button.dataset.chatId = chatId;
                 button.textContent = chat.title || 'Untitled Chat';
                 
@@ -1157,6 +1438,16 @@
             });
         });
         
+        // Branch item click handlers
+        document.querySelectorAll('.branch-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const chatId = item.dataset.chatId;
+                if (chatId) {
+                    loadChat(chatId);
+                }
+            });
+        });
+        
         // Initialize sample chats on page load
         initializeSampleChats();
         
@@ -1165,7 +1456,21 @@
         
         // Initialize current chat from existing HTML messages on page load
         window.addEventListener('DOMContentLoaded', () => {
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            // Process initial static messages with markdown
+            const initialMsg1 = document.getElementById('initialMessage1');
+            const initialMsg2 = document.getElementById('initialMessage2');
+            
+            if (initialMsg1) {
+                const text1 = 'Sure — "depth of understanding" in HCI literature is often operationalized across three dimensions: 1. Breadth (coverage of core ideas, concepts identified) 2. Accuracy (correctness vs hallucination/overgeneralization) 3. Structure (how well connections are made between concepts) You can turn those into a rubric:\n\n• 0-2 points per dimension\n• Evaluate written summaries, outlines, or concept maps\n• Inter-rater reliability check using Cohen\'s k Would you like me to draft the rubric?';
+                initialMsg1.innerHTML = markdownToHtml(text1);
+            }
+            
+            if (initialMsg2) {
+                const text2 = 'Great instinct. Add process-level indicators, which pair nicely with rubric scoring:\n\n• Time\n• Number of sources consulted\n• Switching behavior (e.g., toggling between article and notes)\n• Latency before taking first note';
+                initialMsg2.innerHTML = markdownToHtml(text2);
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (messagesContainer) {
                 // Extract messages from existing HTML
                 const messageDivs = messagesContainer.querySelectorAll('.flex');
@@ -1173,17 +1478,26 @@
                 const existingHistory = [];
                 
                 messageDivs.forEach(div => {
-                    // Add message-selectable class and click handler to existing messages
+                    // Ensure message-selectable class is present
                     if (!div.classList.contains('message-selectable')) {
                         div.classList.add('message-selectable');
+                    }
+                    
+                    // Add dataset messageId if not present
+                    if (!div.dataset.messageId) {
                         div.dataset.messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-                        
-                        // Add click handler for message selection
+                    }
+                    
+                    // Remove any existing click handlers and add new one
+                    // (We'll replace the element to remove old listeners, or use a flag to prevent duplicates)
+                    const hasClickHandler = div.hasAttribute('data-click-handler-attached');
+                    if (!hasClickHandler) {
+                        div.setAttribute('data-click-handler-attached', 'true');
                         div.addEventListener('click', (e) => {
                             if (document.body.classList.contains('share-mode')) {
                                 e.stopPropagation();
                                 e.preventDefault();
-                                div.classList.toggle('selected');
+                                toggleMessagePair(div);
                                 updateSelectedMessages();
                                 // Force a reflow to ensure CSS is applied
                                 div.offsetHeight;
@@ -1213,11 +1527,8 @@
                     const initialChatId = 'current-chat';
                     currentChatId = initialChatId;
                     
-                    // Generate title from first user message
-                    const firstUserMessage = existingMessages.find(m => m.role === 'user');
-                    const title = firstUserMessage 
-                        ? (firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : ''))
-                        : 'Current Chat';
+                    // Use a descriptive title for the landing page chat
+                    const title = 'Literature Review Study';
                     
                     const initialChat = {
                         title: title,
@@ -1235,8 +1546,24 @@
                         saveChats(chats);
                     }
                     
+                    // Set active state for the branch item
+                    document.querySelectorAll('.branch-item').forEach(item => {
+                        item.classList.remove('active');
+                        if (item.dataset.chatId === initialChatId) {
+                            item.classList.add('active');
+                        }
+                    });
+                    
                     // Set conversation history
                     conversationHistory = existingHistory;
+                    
+                    // Set active state for the branch item
+                    document.querySelectorAll('.branch-item').forEach(item => {
+                        item.classList.remove('active');
+                        if (item.dataset.chatId === initialChatId) {
+                            item.classList.add('active');
+                        }
+                    });
                 }
             }
         });
@@ -1301,6 +1628,7 @@
                     const lines = content.split('\n');
                     const result = [];
                     let inList = false;
+                    let listIsOrdered = false;
                     let listItems = [];
                     
                     for (let i = 0; i < lines.length; i++) {
@@ -1310,7 +1638,9 @@
                         // Headers
                         if (line.match(/^### (.*)$/)) {
                             if (inList) {
-                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                                const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                                result.push(listTag + listItems.join('') + listCloseTag);
                                 listItems = [];
                                 inList = false;
                             }
@@ -1319,7 +1649,9 @@
                             processed = true;
                         } else if (line.match(/^## (.*)$/)) {
                             if (inList) {
-                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                                const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                                result.push(listTag + listItems.join('') + listCloseTag);
                                 listItems = [];
                                 inList = false;
                             }
@@ -1328,7 +1660,9 @@
                             processed = true;
                         } else if (line.match(/^# (.*)$/)) {
                             if (inList) {
-                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                                const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                                result.push(listTag + listItems.join('') + listCloseTag);
                                 listItems = [];
                                 inList = false;
                             }
@@ -1336,12 +1670,26 @@
                             result.push('<h1 class="font-bold text-2xl mt-4 mb-2">' + headerText + '</h1>');
                             processed = true;
                         }
-                        // Lists
-                        else if (line.match(/^[\*\-\•] (.*)$/) || line.match(/^\d+\. (.*)$/)) {
+                        // Lists - bullet points on separate lines
+                        else if (line.match(/^[\*\-\•] (.*)$/)) {
                             if (!inList) {
                                 inList = true;
+                                listIsOrdered = false;
                             }
-                            let listContent = line.replace(/^[\*\-\•] /, '').replace(/^\d+\. /, '');
+                            let listContent = line.replace(/^[\*\-\•]\s+/, '').trim();
+                            // Remove any remaining bullet characters from the content
+                            listContent = listContent.replace(/^[\*\-\•]\s+/, '').trim();
+                            listContent = processInlineFormatting(escapeText(listContent));
+                            listItems.push('<li>' + listContent + '</li>');
+                            processed = true;
+                        }
+                        // Lists - numbered lists
+                        else if (line.match(/^\d+\. (.*)$/)) {
+                            if (!inList) {
+                                inList = true;
+                                listIsOrdered = true;
+                            }
+                            let listContent = line.replace(/^\d+\. /, '');
                             listContent = processInlineFormatting(escapeText(listContent));
                             listItems.push('<li class="ml-4 mb-1">' + listContent + '</li>');
                             processed = true;
@@ -1349,7 +1697,9 @@
                         // Empty line
                         else if (line.trim() === '') {
                             if (inList) {
-                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                                const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                                result.push(listTag + listItems.join('') + listCloseTag);
                                 listItems = [];
                                 inList = false;
                             }
@@ -1362,23 +1712,85 @@
                         // Regular paragraph text
                         if (!processed) {
                             if (inList) {
-                                result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                                const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                                const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                                result.push(listTag + listItems.join('') + listCloseTag);
                                 listItems = [];
                                 inList = false;
                             }
                             let paraContent = processInlineFormatting(escapeText(line));
                             
-                            if (result.length === 0 || result[result.length - 1].match(/<\/(p|h1|h2|h3|ul|pre)>$/)) {
-                                result.push('<p class="mb-2">' + paraContent);
+                            // Handle inline numbered lists (1. 2. 3.) within a paragraph
+                            if (line.match(/\d+\.\s+[^•]/) && !line.match(/^\d+\. /)) {
+                                // Split by numbered items
+                                const parts = line.split(/(?=\d+\.\s+)/);
+                                const textParts = [];
+                                const numberedItems = [];
+                                
+                                parts.forEach(part => {
+                                    const numberedMatch = part.match(/^(\d+)\.\s+(.+?)(?=\d+\.|$)/);
+                                    if (numberedMatch) {
+                                        numberedItems.push('<li class="ml-4 mb-1">' + processInlineFormatting(escapeText(numberedMatch[2].trim())) + '</li>');
+                                    } else {
+                                        const text = part.trim();
+                                        if (text && !text.match(/^\d+\./)) {
+                                            textParts.push(processInlineFormatting(escapeText(text)));
+                                        }
+                                    }
+                                });
+                                
+                                if (textParts.length > 0) {
+                                    result.push('<p class="mb-2">' + textParts.join(' ') + '</p>');
+                                }
+                                if (numberedItems.length > 0) {
+                                    result.push('<ol class="ml-6 my-2">' + numberedItems.join('') + '</ol>');
+                                }
+                            }
+                            // Handle inline bullet points (•) within a paragraph - only if not already processed as a list line
+                            else if (line.includes('•') && !line.match(/^[\*\-\•] /)) {
+                                // Split by bullet points
+                                const parts = line.split(/(?= • )/);
+                                const textParts = [];
+                                const bulletItems = [];
+                                
+                                parts.forEach(part => {
+                                    if (part.trim().startsWith('•')) {
+                                        let bulletText = part.replace(/^•\s+/, '').trim();
+                                        // Remove any remaining bullet characters
+                                        bulletText = bulletText.replace(/^[\*\-\•]\s+/, '').trim();
+                                        if (bulletText) {
+                                            bulletItems.push('<li>' + processInlineFormatting(escapeText(bulletText)) + '</li>');
+                                        }
+                                    } else {
+                                        const text = part.trim();
+                                        if (text) {
+                                            textParts.push(processInlineFormatting(escapeText(text)));
+                                        }
+                                    }
+                                });
+                                
+                                if (textParts.length > 0) {
+                                    result.push('<p class="mb-2">' + textParts.join(' ') + '</p>');
+                                }
+                                if (bulletItems.length > 0) {
+                                    result.push('<ul class="ml-6 my-2">' + bulletItems.join('') + '</ul>');
+                                }
                             } else {
-                                result[result.length - 1] += '<br>' + paraContent;
+                                // Regular paragraph without bullets
+                                if (result.length === 0 || result[result.length - 1].match(/<\/(p|h1|h2|h3|ul|pre)>$/)) {
+                                    result.push('<p class="mb-2">' + paraContent);
+                                } else {
+                                    result[result.length - 1] += '<br>' + paraContent;
+                                }
                             }
                         }
                     }
                     
                     // Close any open list
                     if (inList) {
-                        result.push('<ul class="list-disc ml-6 my-2">' + listItems.join('') + '</ul>');
+                        const listTag = listIsOrdered ? '<ol class="ml-6 my-2">' : '<ul class="ml-6 my-2">';
+                        const listCloseTag = listIsOrdered ? '</ol>' : '</ul>';
+                        result.push(listTag + listItems.join('') + listCloseTag);
                     }
                     
                     // Close any open paragraph
@@ -1400,6 +1812,197 @@
             return html;
         }
         
+        // Track if branch notes have been added
+        let tedsBranchNoteAdded = false;
+        let paigesBranchNoteAdded = false;
+        let carlosBranchNoteAdded = false;
+        let sylviasBranchNoteAdded = false;
+        
+        // Function to add Ted's branch note
+        function addTedsBranchNote() {
+            if (tedsBranchNoteAdded || currentBranch !== 'Ted S.') {
+                return;
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
+            if (!messagesContainer) return;
+            
+            // Check if there are any branch messages already
+            const existingBranchMessages = messagesContainer.querySelectorAll('.branch-message');
+            if (existingBranchMessages.length > 0) {
+                // Find the first branch message
+                const firstBranchMessage = existingBranchMessages[0];
+                
+                // Create a wrapper div that will contain both the note and maintain positioning
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'relative';
+                wrapperDiv.style.position = 'relative';
+                
+                // Create note element
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'branch-note ted-note';
+                noteDiv.innerHTML = `
+                    <strong>Note from Ted:</strong>
+                    I'm focusing on the behavioral metrics approach, particularly operationalizing switching behavior and time ranges for meaningful differences between conditions.
+                `;
+                
+                // Clone the first branch message and its siblings until we find a non-branch message or end
+                const firstBranchMessageParent = firstBranchMessage.parentNode;
+                const firstBranchMessageIndex = Array.from(firstBranchMessageParent.children).indexOf(firstBranchMessage);
+                
+                // Insert wrapper before the first branch message
+                firstBranchMessageParent.insertBefore(wrapperDiv, firstBranchMessage);
+                
+                // Move the first branch message into the wrapper
+                wrapperDiv.appendChild(firstBranchMessage);
+                
+                // Add the note to the wrapper
+                wrapperDiv.appendChild(noteDiv);
+                
+                tedsBranchNoteAdded = true;
+            }
+        }
+        
+        // Function to add Paige's branch note
+        function addPaigesBranchNote() {
+            if (paigesBranchNoteAdded || currentBranch !== 'Paige T.') {
+                return;
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
+            if (!messagesContainer) return;
+            
+            // Check if there are any branch messages already
+            const existingBranchMessages = messagesContainer.querySelectorAll('.branch-message');
+            if (existingBranchMessages.length > 0) {
+                // Find the first branch message
+                const firstBranchMessage = existingBranchMessages[0];
+                
+                // Create a wrapper div that will contain both the note and maintain positioning
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'relative';
+                wrapperDiv.style.position = 'relative';
+                
+                // Create note element
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'branch-note paige-note';
+                noteDiv.innerHTML = `
+                    <strong>Note from Paige:</strong>
+                    I'm interested in understanding the student experience through qualitative methods - exploring how students feel about different study methods and the reasons behind their choices.
+                `;
+                
+                // Clone the first branch message and its siblings until we find a non-branch message or end
+                const firstBranchMessageParent = firstBranchMessage.parentNode;
+                const firstBranchMessageIndex = Array.from(firstBranchMessageParent.children).indexOf(firstBranchMessage);
+                
+                // Insert wrapper before the first branch message
+                firstBranchMessageParent.insertBefore(wrapperDiv, firstBranchMessage);
+                
+                // Move the first branch message into the wrapper
+                wrapperDiv.appendChild(firstBranchMessage);
+                
+                // Add the note to the wrapper
+                wrapperDiv.appendChild(noteDiv);
+                
+                paigesBranchNoteAdded = true;
+            }
+        }
+        
+        // Function to add Carlos's branch note
+        function addCarlosBranchNote() {
+            if (carlosBranchNoteAdded || currentBranch !== 'Carlos R.') {
+                return;
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
+            if (!messagesContainer) return;
+            
+            // In Carlos's branch, find the first message that's NOT a paige-message (Carlos's first contribution)
+            const allBranchMessages = messagesContainer.querySelectorAll('.branch-message');
+            let carlosFirstMessage = null;
+            
+            for (let msg of allBranchMessages) {
+                if (!msg.classList.contains('paige-message')) {
+                    carlosFirstMessage = msg;
+                    break;
+                }
+            }
+            
+            // If no Carlos message found, use the first branch message
+            if (!carlosFirstMessage && allBranchMessages.length > 0) {
+                carlosFirstMessage = allBranchMessages[0];
+            }
+            
+            if (carlosFirstMessage) {
+                // Create a wrapper div that will contain both the note and maintain positioning
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'relative';
+                wrapperDiv.style.position = 'relative';
+                
+                // Create note element
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'branch-note carlos-note';
+                noteDiv.innerHTML = `
+                    <strong>Note from Carlos:</strong>
+                    I'm exploring the quantitative approach, focusing on experimental and quasi-experimental designs to test relationships and effects between study methods and outcomes.
+                `;
+                
+                // Clone the first branch message and its siblings until we find a non-branch message or end
+                const carlosFirstMessageParent = carlosFirstMessage.parentNode;
+                
+                // Insert wrapper before Carlos's first message
+                carlosFirstMessageParent.insertBefore(wrapperDiv, carlosFirstMessage);
+                
+                // Move Carlos's first message into the wrapper
+                wrapperDiv.appendChild(carlosFirstMessage);
+                
+                // Add the note to the wrapper
+                wrapperDiv.appendChild(noteDiv);
+                
+                carlosBranchNoteAdded = true;
+            }
+        }
+        
+        // Function to add Sylvia's note (for main chat view)
+        function addSylviasNote() {
+            if (sylviasBranchNoteAdded || currentChatId !== 'sylvia-research-questions' || currentBranch !== null) {
+                return;
+            }
+            
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
+            if (!messagesContainer) return;
+            
+            // Find the first user message (Sylvia's initial message)
+            const firstUserMessage = messagesContainer.querySelector('.flex.justify-end');
+            if (firstUserMessage) {
+                // Create a wrapper div
+                const wrapperDiv = document.createElement('div');
+                wrapperDiv.className = 'relative';
+                wrapperDiv.style.position = 'relative';
+                
+                // Create note element
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'branch-note sylvia-note';
+                noteDiv.innerHTML = `
+                    <strong>Note from Sylvia:</strong>
+                    I'm starting this conversation to explore research design options for studying student study habits. I'm open to different methodological approaches.
+                `;
+                
+                const firstUserMessageParent = firstUserMessage.parentNode;
+                
+                // Insert wrapper before the first user message
+                firstUserMessageParent.insertBefore(wrapperDiv, firstUserMessage);
+                
+                // Move the first user message into the wrapper
+                wrapperDiv.appendChild(firstUserMessage);
+                
+                // Add the note to the wrapper
+                wrapperDiv.appendChild(noteDiv);
+                
+                sylviasBranchNoteAdded = true;
+            }
+        }
+        
         // Function to add message to chat
         function addMessageToChat(text, isUser = false, isBranchMessage = false) {
             const messageDiv = document.createElement('div');
@@ -1418,16 +2021,16 @@
             
             if (isUser) {
                 messageDiv.innerHTML = `
-                    <div class="max-w-[85%] bg-blue-100 rounded-2xl px-4 py-3">
-                        <p class="text-gray-800">${escapeHtml(text)}</p>
+                    <div class="max-w-[75%] bg-blue-50 rounded-[5px] px-5 py-4 shadow-md">
+                        <p class="text-gray-800 leading-relaxed">${escapeHtml(text)}</p>
                     </div>
                 `;
             } else {
                 // Use markdown rendering for AI messages
                 const formattedText = markdownToHtml(text);
                 messageDiv.innerHTML = `
-                    <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                        <div class="text-gray-800 prose prose-sm max-w-none">${formattedText}</div>
+                    <div class="ai-message-bubble max-w-[75%] bg-white rounded-[5px] px-5 py-4 shadow-md">
+                        <div class="text-gray-800 leading-relaxed prose prose-sm max-w-none">${formattedText}</div>
                     </div>
                 `;
             }
@@ -1437,23 +2040,33 @@
                 if (document.body.classList.contains('share-mode')) {
                     e.stopPropagation();
                     e.preventDefault();
-                    const isSelected = messageDiv.classList.contains('selected');
-                    if (isSelected) {
-                        messageDiv.classList.remove('selected');
-                    } else {
-                        messageDiv.classList.add('selected');
-                    }
+                    toggleMessagePair(messageDiv);
                     updateSelectedMessages();
-                    console.log('Message toggled, now selected:', !isSelected);
                 }
             });
             
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (messagesContainer) {
                 messagesContainer.appendChild(messageDiv);
+                
+                // Check if we need to add branch notes
+                if (isBranchMessage && isUser) {
+                    // Use setTimeout to ensure DOM is updated
+                    setTimeout(() => {
+                        if (currentBranch === 'Ted S.') {
+                            addTedsBranchNote();
+                        } else if (currentBranch === 'Paige T.') {
+                            addPaigesBranchNote();
+                        } else if (currentBranch === 'Carlos R.') {
+                            addCarlosBranchNote();
+                        }
+                    }, 0);
+                }
             }
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return messageDiv;
         }
         
         // Function to generate initial message for a branch (pre-populated for demo)
@@ -1463,8 +2076,11 @@
             let aiResponse = '';
             
             if (branchName === 'Carlos R.') {
-                branchMessage = "I'm particularly interested in how we can measure the structural dimension you mentioned. Could you elaborate on how to assess how well connections are made between concepts? Also, have you seen any studies that combine rubric-based and behavioral metrics effectively?";
-                aiResponse = "Great question. For the structural dimension, you can use concept mapping tasks where participants create visual representations of relationships between ideas. Score based on: (1) number of connections, (2) hierarchical organization, (3) cross-linking between distant concepts. \n\nFor combining metrics, see **Kintsch & van Dijk (1978)** on text comprehension and **Chi et al. (1989)** on self-explanations. They used both process (think-aloud protocols) and product (concept maps) measures. More recently, **Koedinger et al. (2013)** combined clickstream data with learning outcomes in MOOCs—similar approach you could adapt.";
+                branchMessage = "I'm interested in seeing if certain study methods actually lead to better exam scores. What would be a good way to test that?";
+                aiResponse = "Great question! To test whether study methods affect exam scores, you could:\n\n**Compare two groups**:\n- Group 1: Students who use flashcards\n- Group 2: Students who just read their notes\n- Then compare their exam scores\n\n**Track students over time**:\n- Ask students to report which study methods they use\n- See if students who use certain methods get higher scores\n- Look for patterns across multiple exams\n\n**Test different methods directly**:\n- Have some students study one way (like practice tests)\n- Have other students study another way (like re-reading)\n- Give everyone the same exam and compare scores\n\nThe key is making sure you're comparing similar students (same class, similar backgrounds) so the study method is what's different, not other factors. Which approach sounds most doable for your situation?";
+            } else if (branchName === 'Paige T.') {
+                branchMessage = "I'm really interested in understanding the student experience - like how they feel about different study methods and why they choose what they do. What kind of study would help me learn about that?";
+                aiResponse = "That sounds like a perfect fit for a qualitative study! You could:\n\n**Interview students** to hear their stories about studying:\n- \"What does your study process look like when preparing for exams?\"\n- \"How do you decide which study method to use for different classes?\"\n- \"What makes a study session feel successful to you?\"\n\n**Observe students studying** to see what they actually do:\n- Watch how they organize their notes\n- See when they take breaks\n- Notice what helps them focus\n\n**Ask students to keep journals** about their study habits for a few weeks\n\nThese approaches help you understand the \"why\" and \"how\" behind study habits, not just the numbers. Would you like help planning interviews or observations?";
             } else if (branchName === 'Ted S.') {
                 branchMessage = "The behavioral metrics approach sounds promising. I'm curious about the switching behavior metric specifically - how would you operationalize that in a study? Also, what's the typical time range you'd expect to see meaningful differences between conditions?";
                 aiResponse = "For switching behavior, you can track: (1) **tab switches** between article and notes/document, (2) **scroll events** indicating re-reading, (3) **time spent** in each view before switching. Use event logging (e.g., browser extension or screen recording with timestamp analysis). \n\nTime ranges depend on task complexity, but for literature review: \n- **Short tasks** (15-30 min): differences may appear in first 5-10 minutes \n- **Medium tasks** (1-2 hours): meaningful differences typically emerge after 20-30 minutes \n- **Long tasks** (2+ hours): patterns stabilize around 45-60 minutes\n\nReference: **Pirolli & Card (1999)** on information foraging found switching patterns differentiate expert vs. novice behavior within first 20 minutes of task.";
@@ -1517,7 +2133,7 @@
             loadingDiv.id = 'loadingIndicator';
             loadingDiv.className = 'flex justify-start mb-6';
             loadingDiv.innerHTML = `
-                <div class="ai-message-bubble max-w-[85%] bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                <div class="ai-message-bubble max-w-[75%] bg-white rounded-[5px] px-5 py-4 shadow-md">
                     <div class="flex items-center gap-2">
                         <div class="flex gap-1">
                             <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
@@ -1528,7 +2144,7 @@
                     </div>
                 </div>
             `;
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (messagesContainer) {
                 messagesContainer.appendChild(loadingDiv);
             }
@@ -1574,12 +2190,246 @@
         // Track selected messages for sharing
         let selectedMessages = new Set();
         
+        // Function to get message pair (user + AI)
+        function getMessagePair(messageDiv) {
+            const isUser = messageDiv.classList.contains('justify-end');
+            let userMsg = null;
+            let aiMsg = null;
+            
+            // Get the messages container
+            const messagesContainer = messageDiv.closest('.max-w-4xl');
+            if (!messagesContainer) return { userMsg: null, aiMsg: null };
+            
+            // Get all message-selectable elements in order
+            const allMessages = Array.from(messagesContainer.querySelectorAll('.message-selectable'));
+            const currentIndex = allMessages.indexOf(messageDiv);
+            
+            if (currentIndex === -1) return { userMsg: null, aiMsg: null };
+            
+            if (isUser) {
+                userMsg = messageDiv;
+                // Find the immediately following AI message (next message-selectable that is justify-start)
+                for (let i = currentIndex + 1; i < allMessages.length; i++) {
+                    const nextMsg = allMessages[i];
+                    if (nextMsg.classList.contains('justify-start')) {
+                        aiMsg = nextMsg;
+                        break;
+                    }
+                    // If we hit another user message, stop looking
+                    if (nextMsg.classList.contains('justify-end')) {
+                        break;
+                    }
+                }
+            } else {
+                aiMsg = messageDiv;
+                // Find the immediately preceding user message (previous message-selectable that is justify-end)
+                for (let i = currentIndex - 1; i >= 0; i--) {
+                    const prevMsg = allMessages[i];
+                    if (prevMsg.classList.contains('justify-end')) {
+                        userMsg = prevMsg;
+                        break;
+                    }
+                    // If we hit another AI message, stop looking
+                    if (prevMsg.classList.contains('justify-start')) {
+                        break;
+                    }
+                }
+            }
+            
+            return { userMsg, aiMsg };
+        }
+        
+        // Function to get all message pairs in order
+        function getAllMessagePairs() {
+            const messagesContainer = document.querySelector('.max-w-4xl');
+            if (!messagesContainer) return [];
+            
+            const allMessages = Array.from(messagesContainer.querySelectorAll('.message-selectable'));
+            const pairs = [];
+            let i = 0;
+            
+            while (i < allMessages.length) {
+                const msg = allMessages[i];
+                if (msg.classList.contains('justify-end')) {
+                    // This is a user message, find its AI reply
+                    const { userMsg, aiMsg } = getMessagePair(msg);
+                    if (userMsg && aiMsg) {
+                        pairs.push({ userMsg, aiMsg, index: pairs.length });
+                        // Skip to after the AI message
+                        const aiIndex = allMessages.indexOf(aiMsg);
+                        i = aiIndex + 1;
+                    } else {
+                        i++;
+                    }
+                } else {
+                    i++;
+                }
+            }
+            
+            return pairs;
+        }
+        
+        // Function to fill gaps between selected pairs
+        function fillGapsBetweenSelectedPairs() {
+            const allPairs = getAllMessagePairs();
+            const selectedPairs = [];
+            
+            // Find all selected pairs
+            allPairs.forEach((pair, index) => {
+                if (pair.userMsg.classList.contains('selected') && pair.aiMsg.classList.contains('selected')) {
+                    selectedPairs.push({ pair, index });
+                }
+            });
+            
+            if (selectedPairs.length < 2) return; // Need at least 2 pairs to have gaps
+            
+            // Sort by index
+            selectedPairs.sort((a, b) => a.index - b.index);
+            
+            // Fill gaps between consecutive selected pairs
+            for (let i = 0; i < selectedPairs.length - 1; i++) {
+                const currentIndex = selectedPairs[i].index;
+                const nextIndex = selectedPairs[i + 1].index;
+                
+                // If there are pairs between them, select those too
+                for (let j = currentIndex + 1; j < nextIndex; j++) {
+                    const gapPair = allPairs[j];
+                    if (gapPair && !gapPair.userMsg.classList.contains('selected')) {
+                        gapPair.userMsg.classList.add('selected');
+                        gapPair.aiMsg.classList.add('selected');
+                    }
+                }
+            }
+        }
+        
+        // Function to check if a pair is in the middle of other selected pairs
+        function isPairInMiddle(userMsg, aiMsg) {
+            const allPairs = getAllMessagePairs();
+            const currentPairIndex = allPairs.findIndex(pair => 
+                pair.userMsg === userMsg && pair.aiMsg === aiMsg
+            );
+            
+            if (currentPairIndex === -1) return false;
+            
+            // Check if there are selected pairs before and after this one
+            let hasSelectedBefore = false;
+            let hasSelectedAfter = false;
+            
+            for (let i = currentPairIndex - 1; i >= 0; i--) {
+                const pair = allPairs[i];
+                if (pair.userMsg.classList.contains('selected') && 
+                    pair.aiMsg.classList.contains('selected')) {
+                    hasSelectedBefore = true;
+                    break;
+                }
+            }
+            
+            for (let i = currentPairIndex + 1; i < allPairs.length; i++) {
+                const pair = allPairs[i];
+                if (pair.userMsg.classList.contains('selected') && 
+                    pair.aiMsg.classList.contains('selected')) {
+                    hasSelectedAfter = true;
+                    break;
+                }
+            }
+            
+            // If there are selected pairs on both sides, this is in the middle
+            return hasSelectedBefore && hasSelectedAfter;
+        }
+        
+        // Function to toggle message pair selection
+        function toggleMessagePair(messageDiv) {
+            const { userMsg, aiMsg } = getMessagePair(messageDiv);
+            
+            // Only allow selection if both parts of the pair exist
+            if (!userMsg || !aiMsg) {
+                return false; // Can't select incomplete pair
+            }
+            
+            const isSelected = messageDiv.classList.contains('selected');
+            
+            if (isSelected) {
+                // Check if this pair is in the middle of other selected pairs
+                if (isPairInMiddle(userMsg, aiMsg)) {
+                    // Don't allow deselection of middle pairs
+                    return false;
+                }
+                
+                // Deselect both
+                userMsg.classList.remove('selected');
+                aiMsg.classList.remove('selected');
+            } else {
+                // Select both
+                userMsg.classList.add('selected');
+                aiMsg.classList.add('selected');
+                
+                // Fill any gaps between selected pairs
+                fillGapsBetweenSelectedPairs();
+            }
+            
+            return true;
+        }
+        
         // Function to update selected messages set
         function updateSelectedMessages() {
             selectedMessages.clear();
             document.querySelectorAll('.message-selectable.selected').forEach(msg => {
                 selectedMessages.add(msg);
             });
+        }
+        
+        // Function to validate that all selected messages are in complete pairs with no gaps
+        function validateSelectedPairs() {
+            const selected = Array.from(selectedMessages);
+            const checked = new Set();
+            
+            for (const msg of selected) {
+                if (checked.has(msg)) continue;
+                
+                const { userMsg, aiMsg } = getMessagePair(msg);
+                
+                // Check if this is a complete pair
+                if (!userMsg || !aiMsg) {
+                    return false; // Incomplete pair found
+                }
+                
+                // Check if both are selected
+                if (!userMsg.classList.contains('selected') || !aiMsg.classList.contains('selected')) {
+                    return false; // Pair is not fully selected
+                }
+                
+                checked.add(userMsg);
+                checked.add(aiMsg);
+            }
+            
+            // Ensure all selected messages are accounted for
+            if (checked.size !== selected.length) {
+                return false;
+            }
+            
+            // Check for gaps: all selected pairs should be consecutive
+            const allPairs = getAllMessagePairs();
+            const selectedPairIndices = [];
+            
+            allPairs.forEach((pair, index) => {
+                if (pair.userMsg.classList.contains('selected') && pair.aiMsg.classList.contains('selected')) {
+                    selectedPairIndices.push(index);
+                }
+            });
+            
+            if (selectedPairIndices.length === 0) return false;
+            
+            // Sort indices
+            selectedPairIndices.sort((a, b) => a - b);
+            
+            // Check if there are any gaps
+            for (let i = 0; i < selectedPairIndices.length - 1; i++) {
+                if (selectedPairIndices[i + 1] - selectedPairIndices[i] > 1) {
+                    return false; // Gap found
+                }
+            }
+            
+            return true;
         }
         
         // Function to get content from selected messages
@@ -1673,7 +2523,7 @@
                         conversationHistory = chat.conversationHistory || [];
                         
                         // Clear and reload main conversation messages
-                        const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                        const messagesContainer = chatMessages.querySelector('.max-w-4xl');
                         if (messagesContainer) {
                             messagesContainer.innerHTML = '';
                         }
@@ -1691,7 +2541,11 @@
                         saveChat(currentChatId, chat);
                         
                         // Update UI - remove branch styling
-                        document.body.classList.remove('carlos-selected', 'ted-selected');
+                        document.body.classList.remove('carlos-selected', 'ted-selected', 'paige-selected', 'sylvia-chat');
+                        // Re-add sylvia-chat if this is Sylvia's conversation
+                        if (currentChatId === 'sylvia-research-questions') {
+                            document.body.classList.add('sylvia-chat');
+                        }
                         
                         // Update branch person active state (none active)
                         updateBranchPersonActiveState(null);
@@ -1725,7 +2579,7 @@
                 }
                 
                 // Get current message count before branching (this is the branch point)
-                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                const messagesContainer = chatMessages.querySelector('.max-w-4xl');
                 const currentMessageCount = messagesContainer ? messagesContainer.querySelectorAll('.flex').length : 0;
                 
                 // Create or switch to branch
@@ -1781,7 +2635,17 @@
                     chat.branches[name].messages.forEach((msg, index) => {
                         // Only mark messages after the branch point as branch messages
                         const isBranchMsg = index >= branchPointIndex;
-                        addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                        const messageDiv = addMessageToChat(msg.content, msg.role === 'user', isBranchMsg);
+                        // In Ted's branch of Sylvia's chat, mark Carlos's message (index 2) with a special class for blue styling
+                        if (messageDiv && name === 'Ted S.' && currentChatId === 'sylvia-research-questions' && 
+                            index === 2 && msg.role === 'user' && isBranchMsg) {
+                            messageDiv.classList.add('carlos-message');
+                            // Force the blue color directly via inline style to ensure it overrides
+                            const bubbleDiv = messageDiv.querySelector('div.bg-blue-50');
+                            if (bubbleDiv) {
+                                bubbleDiv.style.backgroundColor = '#90DFFB';
+                            }
+                        }
                     });
                 }
                 
@@ -1797,15 +2661,42 @@
                 saveChat(currentChatId, chat);
                 
                 // Update UI
-                document.body.classList.remove('carlos-selected', 'ted-selected');
+                document.body.classList.remove('carlos-selected', 'ted-selected', 'paige-selected', 'sylvia-chat');
+                // Keep sylvia-chat class if this is Sylvia's conversation
+                if (currentChatId === 'sylvia-research-questions') {
+                    document.body.classList.add('sylvia-chat');
+                }
                 if (name === 'Carlos R.') {
                     document.body.classList.add('carlos-selected');
                 } else if (name === 'Ted S.') {
                     document.body.classList.add('ted-selected');
+                } else if (name === 'Paige T.') {
+                    document.body.classList.add('paige-selected');
                 }
                 
                 // Update branch person active state
                 updateBranchPersonActiveState(name);
+                
+                // Reset all branch note flags when switching branches
+                tedsBranchNoteAdded = false;
+                paigesBranchNoteAdded = false;
+                carlosBranchNoteAdded = false;
+                sylviasBranchNoteAdded = false;
+                
+                // Add branch notes if applicable
+                if (name === 'Ted S.') {
+                    setTimeout(() => {
+                        addTedsBranchNote();
+                    }, 100);
+                } else if (name === 'Paige T.') {
+                    setTimeout(() => {
+                        addPaigesBranchNote();
+                    }, 100);
+                } else if (name === 'Carlos R.') {
+                    setTimeout(() => {
+                        addCarlosBranchNote();
+                    }, 100);
+                }
                 
                 // Scroll to bottom
                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1814,7 +2705,7 @@
         
         // Function to get full chat content
         function getFullChatContent() {
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             if (!messagesContainer) return '';
             
             const messages = [];
@@ -1910,7 +2801,14 @@
                 
                 if (selectedMessages.size === 0) {
                     // If no messages selected, show a message
-                    alert('Please select one or more messages to share. Click on message bubbles to select them.');
+                    alert('Please select one or more message pairs to share. Click on message bubbles to select them (user messages and their AI replies are selected together).');
+                    return;
+                }
+                
+                // Validate that all selected messages are in complete pairs
+                updateSelectedMessages();
+                if (!validateSelectedPairs()) {
+                    alert('Please select complete message pairs (user input and AI reply together). You cannot share only a user message or only an AI message.');
                     return;
                 }
                 
@@ -1959,13 +2857,22 @@
                 // Get the note from textarea
                 const note = tooltipTextarea ? tooltipTextarea.value.trim() : '';
                 
-                // Get selected messages content
-                const selectedContent = getSelectedMessagesContent();
+                // Update and validate selected messages
+                updateSelectedMessages();
                 
                 if (selectedMessages.size === 0) {
-                    alert('Please select at least one message to share.');
+                    alert('Please select one or more message pairs to share. Click on message bubbles to select them (user messages and their AI replies are selected together).');
                     return;
                 }
+                
+                // Validate that all selected messages are in complete pairs
+                if (!validateSelectedPairs()) {
+                    alert('Please select complete message pairs (user input and AI reply together). You cannot share only a user message or only an AI message.');
+                    return;
+                }
+                
+                // Get selected messages content
+                const selectedContent = getSelectedMessagesContent();
                 
                 // Combine note and selected messages
                 let fullMessage = '';
@@ -2064,7 +2971,7 @@
             messageInput.disabled = true;
             
             // Add user message to chat - check if we're in a branch and if this is after branch point
-            const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+            const messagesContainer = chatMessages.querySelector('.max-w-4xl');
             const currentMessageCount = messagesContainer ? messagesContainer.querySelectorAll('.flex').length : 0;
             const isBranchMsg = currentBranch && branchPoint !== null && currentMessageCount >= branchPoint;
             addMessageToChat(message, true, isBranchMsg);
@@ -2132,11 +3039,11 @@
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'flex justify-start mb-6';
                 errorDiv.innerHTML = `
-                    <div class="ai-message-bubble max-w-[85%] bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+                    <div class="ai-message-bubble max-w-[85%] bg-red-50 border border-red-200 rounded-[5px] px-4 py-3">
                         <p class="text-red-800">Error: ${escapeHtml(error.message)}</p>
                     </div>
                 `;
-                const messagesContainer = chatMessages.querySelector('.max-w-2xl');
+                const messagesContainer = chatMessages.querySelector('.max-w-4xl');
                 if (messagesContainer) {
                     messagesContainer.appendChild(errorDiv);
                 }
