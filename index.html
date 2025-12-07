@@ -402,25 +402,36 @@
         /* Notification toast */
         .notification-toast {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #10b981;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            top: 80px;
+            right: 24px;
+            background: white;
+            color: #1f2937;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
             z-index: 1000;
             display: none;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             opacity: 0;
+            transform: translateY(-20px);
             transition: opacity 0.3s ease, transform 0.3s ease;
+            border: 1px solid #e5e7eb;
+            min-width: 200px;
         }
         .notification-toast.show {
             display: flex;
             opacity: 1;
-            transform: translate(-50%, -50%);
+            transform: translateY(0);
+        }
+        .notification-toast svg {
+            color: #10b981;
+            flex-shrink: 0;
+        }
+        .notification-toast span {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1f2937;
         }
         /* Sent message tooltip */
         .sent-message-tooltip {
